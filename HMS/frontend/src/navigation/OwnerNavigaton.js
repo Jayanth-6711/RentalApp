@@ -1,5 +1,5 @@
 import React, { useContext, useRef, useState, useCallback, useEffect } from "react";
-import { View, Text, StyleSheet, Platform, TouchableOpacity, Pressable } from "react-native";
+import { View, Text, StyleSheet, Platform, TouchableOpacity, Pressable, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
@@ -15,6 +15,7 @@ import OwnerProfileScreen from "../screens/owner/OwnerProfileScreen";
 import AccountSwitcherSheet from "../components/AccountSwitcherSheet";
 import { BookingContext } from "../context/BookingContext";
 import { useLanguage } from "../utils/LanguageContext";
+import BASE_URL, { fetchWithAuth, WS_BASE_URL } from "../config/Api";
 
 import COLORS from "../theme/colors";
 
@@ -88,6 +89,50 @@ export default function OwnerNavigation({ route, navigation }) {
       if (phone) setactivePhone(phone.trim());
     })();
   }, []);
+
+  // Listen for suspension events
+  useEffect(() => {
+    if (!activePhone) return;
+
+    const wsUrl = `${WS_BASE_URL}/ws/owner-status/${encodeURIComponent(activePhone)}/`;
+    const ws = new WebSocket(wsUrl);
+
+    ws.onmessage = async (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === "account_status" && msg.status === "suspend") {
+          let reasonText = msg.message || "Your account has been suspended by admin.";
+          try {
+            const res = await fetchWithAuth(`${BASE_URL}/api/get_suspension_reason/${encodeURIComponent(activePhone)}/`);
+            if (res.ok) {
+              const data = await res.json();
+              if (data.reason) reasonText = data.reason;
+            }
+          } catch (err) {}
+
+          Alert.alert(
+            t("account_suspended") || "Account Suspended",
+            reasonText,
+            [
+              {
+                text: "OK",
+                onPress: async () => {
+                  await AsyncStorage.multiRemove(["userToken", "ownerPhone"]);
+                  // Also remove from logged in accounts if desired, but they will be blocked anyway on next login
+                  navigation.reset({ index: 0, routes: [{ name: "OwnerLoginScreen" }] });
+                }
+              }
+            ],
+            { cancelable: false }
+          );
+        }
+      } catch (err) {}
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [activePhone, navigation, t]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

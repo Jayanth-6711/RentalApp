@@ -52,23 +52,36 @@ export default function OwnerIssues() {
   const [selectedImage, setSelectedImage] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const fetchOwnerIssues = async () => {
+  const fetchOwnerIssues = async (searchQuery = "", showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       const ownerPhone = await AsyncStorage.getItem("ownerPhone");
-      const response = await fetchWithAuth(`${BASE_URL}/api/owner-issues/${encodeURIComponent(ownerPhone)}/`);
+      const url = `${BASE_URL}/api/owner-issues/${encodeURIComponent(ownerPhone)}/${searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : ""}`;
+      const response = await fetchWithAuth(url);
       const data = await response.json();
       setIssues(Array.isArray(data) ? data : []);
     } catch (error) {
       console.log("Owner Fetch Error:", error);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchOwnerIssues();
-  }, []);
+    fetchOwnerIssues(search, true); // Initial fetch with loading
+
+    const interval = setInterval(() => {
+      fetchOwnerIssues(search, false); // Polling fetch without loading
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [search]);
+
+  const handleSearch = (text) => {
+    setSearch(text);
+    // Debounce or real-time fetch from backend
+    fetchOwnerIssues(text);
+  };
 
   /* ---------- ZOOM & PAN LOGIC ---------- */
   const baseScale = useRef(new Animated.Value(1)).current;
@@ -267,30 +280,38 @@ export default function OwnerIssues() {
     }
   };
 
-  /* ---------- FILTER LOGIC ---------- */
+  /* ---------- FILTER & SORT LOGIC ---------- */
 
-  const filteredIssues = issues.filter((item) => {
-    const matchesSearch = (item.title || "")
-      .toLowerCase()
-      .includes(search.toLowerCase());
+  const filteredIssues = issues
+    .filter((item) => {
+      const searchLower = search.toLowerCase();
+      const matchesSearch = 
+        (item.title || "").toLowerCase().includes(searchLower) ||
+        (item.tenant_name || "").toLowerCase().includes(searchLower) ||
+        (item.tenant_phone || "").toLowerCase().includes(searchLower) ||
+        (item.description || "").toLowerCase().includes(searchLower);
 
-    const matchesStatus =
-      activeFilter === "All" || item.status === activeFilter;
+      const matchesStatus =
+        activeFilter === "All" || item.status === activeFilter;
 
-    return matchesSearch && matchesStatus;
-  });
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      // Completed issues go to the bottom
+      if (a.status === "Completed" && b.status !== "Completed") return 1;
+      if (a.status !== "Completed" && b.status === "Completed") return -1;
+      // Maintain chronological order for others
+      return b.id - a.id;
+    });
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerLeftContainer}>
-          <TouchableOpacity 
-            onPress={() => navigation.goBack()} 
-            style={styles.backButton}
-          >
-            <Ionicons name="arrow-back" size={24} color={COLORS.TEXT_PRIMARY} />
-          </TouchableOpacity>
-          <Text style={styles.pageTitle}>{t('Issues')}</Text>
+          <View>
+            <Text style={styles.headerTitle}>{t("issues")}</Text>
+            <Text style={styles.headerSubtitle}>{t("manage_requests")}</Text>
+          </View>
         </View>
       </View>
 
@@ -332,31 +353,43 @@ export default function OwnerIssues() {
         placeholder={t('search by name')}
         style={styles.search}
         value={search}
-        onChangeText={setSearch}
+        onChangeText={handleSearch}
       />
 
-      <FlatList
-        data={filteredIssues}
-        keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20 }}
-        renderItem={({ item }) => (
-          <TouchableOpacity onPress={() => openDetails(item)}>
-            <View style={styles.card}>
-              <Text style={styles.title}>{item.title}</Text>
-              <Text style={styles.sub}>
-                {item.tenant_name} • {item.tenant_phone}
-              </Text>
-
-              <View style={styles.rowBetween}>
-                <StatusBadge status={item.status} />
-                <Text style={styles.date}>
-                  {new Date(item.date).toLocaleDateString()}
+      {filteredIssues.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="search-outline" size={48} color={COLORS.TEXT_LIGHT} />
+          <Text style={styles.emptyText}>{t('No Issues Found') || 'No Issues Found'}</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredIssues}
+          keyExtractor={(item) => String(item.id)}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20 }}
+          renderItem={({ item }) => (
+            <TouchableOpacity onPress={() => openDetails(item)}>
+              <View style={styles.card}>
+                <View style={styles.cardHeaderRow}>
+                  <Text style={styles.title}>{item.title}</Text>
+                  {item.image && (
+                    <Ionicons name="image" size={18} color={COLORS.PRIMARY} />
+                  )}
+                </View>
+                <Text style={styles.sub}>
+                  {item.tenant_name} • {item.tenant_phone}
                 </Text>
+
+                <View style={styles.rowBetween}>
+                  <StatusBadge status={item.status} />
+                  <Text style={styles.date}>
+                    {new Date(item.date).toLocaleDateString()}
+                  </Text>
+                </View>
               </View>
-            </View>
-          </TouchableOpacity>
-        )}
-      />
+            </TouchableOpacity>
+          )}
+        />
+      )}
 
       <Modal visible={modalVisible} animationType="slide">
         {selectedIssue && (
@@ -376,7 +409,7 @@ export default function OwnerIssues() {
             <View style={styles.detailCard}>
                 <Detail label={t('tenant')} value={selectedIssue.tenant_name} />
                 <Detail label={t('phone_number')} value={selectedIssue.tenant_phone} />
-                <Detail label={t('due date')} value={new Date(selectedIssue.date).toLocaleString()} />
+                <Detail label={t('date') || 'Date'} value={new Date(selectedIssue.date).toLocaleString()} />
               <Detail label="Severity" value={selectedIssue.severity} />
               <Detail label={t('status')} value={selectedIssue.status} />
             </View>
@@ -611,6 +644,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: COLORS.TEXT_PRIMARY,
+  },
+
+  headerSubtitle: {
+    fontSize: 13,
+    color: COLORS.TEXT_SECONDARY,
+    fontWeight: "600",
+  },
+
   backButton: {
     marginRight: 12,
     padding: 4,
@@ -829,8 +874,8 @@ const styles = StyleSheet.create({
 
   updateBtnText: {
     color: COLORS.WHITE,
-    fontWeight: "600",
-    fontSize: 14,
+    fontWeight: "700",
+    fontSize: 16,
   },
 
   summaryRow: {
@@ -893,5 +938,22 @@ const styles = StyleSheet.create({
   viewerCloseText: {
     color: COLORS.WHITE,
     fontWeight: "700",
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: COLORS.TEXT_LIGHT,
+    marginTop: 12,
+    fontWeight: '600',
   },
 });

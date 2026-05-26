@@ -294,9 +294,19 @@ def register_owner(request):
         property_data.pop("gallery_images", None)
         property_data.pop("building_layout", None)
  
-        property_data["owner"] = owner.id
+        property_data["owner"] = owner.pk
         property_data["facilities"] = facilities
         property_data["gallery_images"] = gallery_file_paths
+        
+        cover_image = request.FILES.get("cover_image")
+        if cover_image:
+            property_data["cover_image"] = cover_image
+            
+        if not property_data.get("rent_amount"):
+            property_data.pop("rent_amount", None)
+            
+        if not property_data.get("furnishing_type"):
+            property_data.pop("furnishing_type", None)
  
         # =========================
         # 5️⃣ SAVE PROPERTY
@@ -386,14 +396,14 @@ def register_owner(request):
         # =========================
         # ✅ FINAL RESPONSE
         # =========================
-        token = generate_jwt_token(owner.id, 'owner')
+        token = generate_jwt_token(owner.pk, 'owner')
         return Response(
             {
                 "message": "Registration successful. Wait for approval (2 days)",
                 "status": owner.status,
                 "created_at": owner.created_at,
                 "phone": owner.phone,
-                "owner_id": owner.id,
+                "owner_id": owner.pk,
                 "token": token
             },
             status=status.HTTP_201_CREATED
@@ -544,7 +554,7 @@ def owner_login(request):
                 )
             if owner.status == "active" and owner.password == password:
                 # Generate JWT token
-                token = generate_jwt_token(user_id=owner.id, role='owner', phone=owner.phone)
+                token = generate_jwt_token(user_id=owner.pk, role='owner', phone=owner.phone)
                 
                 return Response(
                     {
@@ -692,13 +702,13 @@ def get_hostel_step3(request, phone):
     # ================= OWNER INFO =================
     # response_data["owner"] = {
         
-    #     "id": owner.id,
+    #     "id": owner.pk,
     #     "name": owner.name,
     #     "phone": owner.phone,
     #     "phone": owner.phone
     # }
     response_data["owner"] = {
-    "id": owner.id,
+    "id": owner.pk,
     "name": owner.name,
     "phone": owner.phone,
     "phone": owner.phone
@@ -735,6 +745,8 @@ def get_properties_listing(request):
     "latitude": float(hostel.latitude) if hostel.latitude else None,
     "longitude": float(hostel.longitude) if hostel.longitude else None,
     "gallery": build_gallery_urls(hostel.gallery_images),
+    "image": hostel.cover_image.name if hostel.cover_image else None,
+    "rent": str(hostel.rent_amount) if hostel.rent_amount else None,
     "isAvailable": True,
     "rating": None,
     "facilities": hostel.facilities if hostel.facilities else [],
@@ -758,6 +770,8 @@ def get_properties_listing(request):
             "latitude": float(apartment.latitude) if apartment.latitude else None,
             "longitude": float(apartment.longitude) if apartment.longitude else None,
             "gallery": build_gallery_urls(apartment.gallery_images),
+            "image": apartment.cover_image.name if apartment.cover_image else None,
+            "rent": str(apartment.rent_amount) if apartment.rent_amount else None,
             "isAvailable": True,
             "rating": None,
             "facilities": apartment.facilities if apartment.facilities else [],
@@ -777,6 +791,8 @@ def get_properties_listing(request):
             "latitude": float(commercial.latitude) if commercial.latitude else None,
             "longitude": float(commercial.longitude) if commercial.longitude else None,
             "gallery": build_gallery_urls(commercial.gallery_images),
+            "image": commercial.cover_image.name if commercial.cover_image else None,
+            "rent": str(commercial.rent_amount) if commercial.rent_amount else None,
             "isAvailable": True,
             "rating": None,
             "facilities": commercial.facilities if commercial.facilities else [],
@@ -795,7 +811,7 @@ def get_properties_listing(request):
 @api_view(['POST'])
 @jwt_required()
 def registerbeds(request):
-    print("🔥 Incoming Data:", request.data)
+    print(" Incoming Data:", request.data)
     serializer = TenantBedSerializer(data=request.data)
 
     if serializer.is_valid():
@@ -810,7 +826,7 @@ def registerbeds(request):
 @api_view(['POST'])
 @jwt_required()
 def registerapartmentbeds(request):
-    print("🔥 Incoming Data:", request.data)
+    print(" Incoming Data:", request.data)
     serializer = ApartmentBedSerializer(data=request.data)
 
     if serializer.is_valid():
@@ -825,7 +841,7 @@ def registerapartmentbeds(request):
 @api_view(['POST'])
 @jwt_required()
 def registercommercialbeds(request):
-    print("🔥 Incoming Data:", request.data)
+    print(" Incoming Data:", request.data)
     serializer = CommercialBedSerializer(data=request.data)
 
     if serializer.is_valid():
@@ -1097,7 +1113,7 @@ def get_all_steps_data(request):
 
         owner_data["owner"] = {
 
-            "id": owner.id,
+            "id": owner.pk,
 
             "name": owner.name,
 
@@ -1466,7 +1482,7 @@ def owner_profile_update(request, phone):
         if new_phone and new_phone.strip():
             stripped_new_phone = new_phone.strip()
             # Check if this phone is already taken by ANOTHER owner
-            existing = Owners.objects.filter(phone__iexact=stripped_new_phone).exclude(id=owner.id).first()
+            existing = Owners.objects.filter(phone__iexact=stripped_new_phone).exclude(pk=owner.pk).first()
             if existing:
                 return Response({
                     "message": "This phone number is already registered with another account.",
@@ -1615,32 +1631,28 @@ def get_tenant_payment_details(request, phone):
         tenant_phone = (tenant.phone or "").strip()
  
         # =========================================
-        # ACCEPTED JOIN REQUEST
+        # ACCEPTED JOIN REQUEST / DIRECT ASSIGNMENT
         # =========================================
         request_obj = JoinRequest.objects.filter(
             tenant=tenant,
             status='accepted'
         ).order_by('-created_at').first()
  
-        if not request_obj:
- 
-            return Response(
-                {
-                    "error": "No approved property found."
-                },
-                status=status.HTTP_404_NOT_FOUND
-            )
- 
-        # Safety check: Catch if the owner foreign key has been orphaned/deleted
-        try:
-            owner = request_obj.owner
-        except Exception:
-            owner = None
- 
+        owner = None
+        if request_obj:
+            try:
+                owner = request_obj.owner
+            except Exception:
+                pass
+                
+        # Fallback to direct owner assignment if added manually
+        if not owner and tenant.owner:
+            owner = tenant.owner
+
         if not owner:
             return Response(
                 {
-                    "error": "Property owner details are missing or corrupt."
+                    "error": "No approved property found. You are not assigned to any property yet."
                 },
                 status=status.HTTP_404_NOT_FOUND
             )
@@ -1665,9 +1677,9 @@ def get_tenant_payment_details(request, phone):
         # =========================================
         # PROPERTY TYPE
         # =========================================
-        p_type = (
-            request_obj.property_type or ""
-        ).lower()
+        p_type = ""
+        if request_obj and request_obj.property_type:
+            p_type = request_obj.property_type.lower()
  
         all_tables = [
             TenantBeds,
@@ -2007,7 +2019,7 @@ def get_tenant_payment_details(request, phone):
 @api_view(['GET'])
 @jwt_required()
 def owner_admin_list(request):
-    owners = Owners.objects.all().order_by('-id')
+    owners = Owners.objects.all().order_by('-owner_id')
  
     data = []
     for owner in owners:
@@ -2021,7 +2033,7 @@ def owner_admin_list(request):
             p_type = "Commercial"
 
         data.append({
-            "id": owner.id,
+            "id": owner.pk,
             "owner_name": owner.name,
             "phone": owner.phone,
             "phone": owner.phone,
@@ -2081,7 +2093,7 @@ def get_owner_full_details(request, phone):
     bank = BankDetails.objects.filter(owner=owner).first()
    
     step1 = {
-        "id": owner.id,
+        "id": owner.pk,
         "name": owner.name if owner.name else "",
         "phone": owner.phone if owner.phone else "",
         "phone": owner.phone if owner.phone else "",
@@ -2633,8 +2645,11 @@ def tenant_notifications(request, identifier):
     """
     # Determine tenant by email or phone
     try: 
-        tenant = Tenent.objects.get(phone=identifier)    
-    except Tenent.DoesNotExist:
+        identifier = identifier.strip()
+        tenant = Tenent.objects.filter(Q(phone__iexact=identifier) | Q(name__iexact=identifier)).first()
+        if not tenant:
+            return Response({"error": "Tenant not found"}, status=404)
+    except Exception as e:
         return Response({"error": "Tenant not found"}, status=404)
  
     # JOIN REQUESTS ONLY
@@ -2768,8 +2783,20 @@ def owner_issues(request, phone):
     # ✅ Only this owner's issues, exclude notifications/reminders
     issues = Issue.objects.filter(owner=owner).exclude(title__icontains='Reminder').order_by('-created_at')
  
+    # Real-time search/filtering in backend
+    search_query = request.query_params.get('search', '').strip()
+    if search_query:
+        issues = issues.filter(
+            Q(title__icontains=search_query) |
+            Q(description__icontains=search_query) |
+            Q(tenant__name__icontains=search_query) |
+            Q(tenant__phone__icontains=search_query)
+        )
+ 
     data = []
     for i in issues:
+        # Find property details for search optimization (optional enhancement)
+        # For now including standard fields
         data.append({
             "id": i.id,
             "title": i.title,
@@ -2778,13 +2805,15 @@ def owner_issues(request, phone):
             "status": i.status,
             "tenant_name": i.tenant.name if i.tenant else "Unknown",
             "tenant_phone": i.tenant.phone if i.tenant else "N/A",
-            "tenant_phone": i.tenant.phone if i.tenant else "N/A",
             "owner_comment": i.owner_comment,
+            "image": request.build_absolute_uri(i.image.url) if i.image else None,
             "date": i.created_at
         })
  
     return Response(data)
- 
+
+
+    
 @api_view(['PATCH'])
 @jwt_required()
 def update_issue_status(request, issue_id):
@@ -2826,7 +2855,7 @@ def update_issue_comment(request, issue_id):
     except Issue.DoesNotExist:
         return Response({"error": "Issue not found"}, status=404)
  
-    print("DATA:", request.data)  # 🔍 MUST PRINT
+    print("DATA:", request.data)  #  MUST PRINT
  
     comment = request.data.get("owner_comment")
  
@@ -2974,7 +3003,7 @@ def withdraw_request(request):
         updated_count = query.update(status='withdrawn')
         print(f"   [BACKEND] Successfully updated {updated_count} records to 'withdrawn'")
        
-        # 🗑️ NEW: If tenant withdraws, also remove them from allotted beds/units
+        # ️ NEW: If tenant withdraws, also remove them from allotted beds/units
         # This handles the "if tenant withdraws after approval, remove them from building" request
         deleted_allotments = 0
        
@@ -3499,7 +3528,7 @@ def cash_payment(request):
         if not phone:
             return Response({"error": "phone is required"}, status=status.HTTP_400_BAD_REQUEST)
  
-        # 🚫 PREVENT DUPLICATE PAYMENTS FOR THE SAME MONTH
+        #  PREVENT DUPLICATE PAYMENTS FOR THE SAME MONTH
         current_month = timezone.now().month
         current_year = timezone.now().year
        
@@ -3516,9 +3545,9 @@ def cash_payment(request):
             }, status=status.HTTP_400_BAD_REQUEST)
  
         # Find or create a payment record
-        payment_reminder = Notification.objects.filter(
-            recipient_phone__iexact=tenant_phone,
-            type__in=['REMINDER', 'PAYMENT_REQUEST']
+        payment = Payment.objects.filter(
+            tenant_phone__iexact=phone,
+            status='PENDING'
         ).order_by('-created_at').first()
  
         if not payment:
@@ -3546,7 +3575,7 @@ def cash_payment(request):
                 status='PENDING',
                 description=description
             )
-        # 🗑️ CLEAR OLD SCREENSHOTS from allotment records
+        # ️ CLEAR OLD SCREENSHOTS from allotment records
         # This prevents the owner dashboard from showing a previous month's UPI
         # screenshot for a new cash payment attempt.
         for table in [TenantBeds, ApartmentTenantBeds, CommercialTenantBeds]:
@@ -3677,6 +3706,8 @@ def get_owner_expenses(request, phone):
     Returns owner expenses from the database.
     """
     try:
+        if phone:
+            phone = phone.strip()
         owner = Owners.objects.filter(phone__iexact=phone).first()
         if not owner:
             return Response({"error": "Owner not found"}, status=404)
@@ -3694,13 +3725,16 @@ def add_expense(request):
     Creates a new expense record for an owner.
     """
     try:
-        phone = request.data.get('owner_phone')
+        phone = request.data.get('owner_phone') or request.data.get('owner_email')
+        if phone:
+            phone = phone.strip()
+        print(f"ADD EXPENSE PHONE: '{phone}'")
         owner = Owners.objects.filter(phone__iexact=phone).first()
         if not owner:
-            return Response({"error": "Owner not found"}, status=404)
+            return Response({"error": f"Owner not found for phone: {phone}"}, status=404)
             
         data = request.data.copy()
-        data['owner'] = owner.id
+        data['owner'] = owner.pk
         
         serializer = ExpenseSerializer(data=data)
         if serializer.is_valid():
@@ -3999,12 +4033,23 @@ def check_owner(request, phone):
             phone = phone[-10:]
         user = Owners.objects.filter(phone=phone).first()
         if user:
-            token = generate_jwt_token(user_id=user.id, role='owner', phone=user.phone)
+            if user.status == 'pending':
+                return Response({
+                    "exists": True,
+                    "error": "Your account is pending approval by admin."
+                })
+            elif user.status == 'suspend':
+                return Response({
+                    "exists": True,
+                    "error": "Your account has been suspended by admin."
+                })
+
+            token = generate_jwt_token(user_id=user.pk, role='owner', phone=user.phone)
             return Response({
                 "exists": True,
                 "token": token,
                 "user": {
-                    "id": user.id,
+                    "id": user.pk,
                     "name": user.name,
                     "phone": user.phone,
                 }

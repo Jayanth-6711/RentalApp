@@ -28,7 +28,7 @@ export default function OwnerExpenseScreen({ navigation }) {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    owner_email: ownerPhone,
+                    owner_phone: ownerPhone,
                     category,
                     amount: parseFloat(amount),
                     date,

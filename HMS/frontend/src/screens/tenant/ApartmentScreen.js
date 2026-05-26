@@ -109,7 +109,7 @@ const getUserLocation = async () => {
 
             facilities: item.facilities || [],
 
-            price: item.price || "15,000",
+            price: item.rent || "",
             bhk: item.bhk || "2BHK",
 
             ownerEmail: item.owner_email,
@@ -285,7 +285,7 @@ const matchesSearch =
               style={styles.card}
               onPress={() => navigation.navigate("PropertyDetailsScreen", { property: item })}
             >
-              <Image source={{ uri: item.image }} style={styles.cardImage} />
+              <Image source={{ uri: item.image || item.galleryImages?.[0] }} style={styles.cardImage} />
               <View style={styles.cardDetails}>
                 <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
                 <Text style={styles.cardAddress} numberOfLines={1}>{shortenAddress(item.address)}</Text>

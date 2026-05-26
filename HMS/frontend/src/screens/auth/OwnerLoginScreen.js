@@ -121,6 +121,11 @@ export default function OwnerLoginScreen({ navigation }) {
 
           console.log("CHECK USER:", userData);
 
+          if (userData.error) {
+            Alert.alert("Access Denied", userData.error);
+            return;
+          }
+
           if (userData.exists) {
 
             // EXISTING OWNER

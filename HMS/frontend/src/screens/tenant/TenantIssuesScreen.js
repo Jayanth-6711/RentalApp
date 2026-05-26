@@ -59,7 +59,8 @@ export default function IssuesScreen() {
 
   const [issues, setIssues] = useState([]);
   const [isFormVisible, setIsFormVisible] = useState(false);
-  const [activeFilter, setActiveFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [priorityFilter, setPriorityFilter] = useState("All");
   const [loading, setLoading] = useState(false);
   const [phone, setPhone] = useState("");
   const [tenantId, setTenantId] = useState("");
@@ -77,33 +78,42 @@ export default function IssuesScreen() {
 
   const handleUpdate = async () => {
     try {
+      setLoading(true);
+      const formData = new FormData();
+      formData.append("title", title);
+      formData.append("description", description);
+      formData.append("severity", priority);
+
+      if (image && !image.startsWith('http')) {
+        formData.append("image", {
+          uri: image,
+          name: "issue_update.jpg",
+          type: "image/jpeg",
+        });
+      }
+
       const response = await fetchWithAuth(
         `${BASE_URL}/api/update-issue/${editingId}/`,
         {
           method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            title: title,
-            description: description,
-            severity: priority,
-          }),
+          body: formData,
         }
       );
 
       const result = await response.json();
-      console.log("UPDATE RESULT:", result);
-
+      
       if (response.ok) {
         Alert.alert("Success", "Issue updated");
+        setEditingId(null);
         fetchIssues();
       } else {
-        Alert.alert("Error", JSON.stringify(result));
+        Alert.alert("Error", result.error || "Failed to update issue");
       }
     } catch (err) {
       console.log(err);
       Alert.alert("Error", err.message);
+    } finally {
+      setLoading(false);
     }
   };
   const fetchIssues = async () => {
@@ -145,9 +155,27 @@ export default function IssuesScreen() {
   );
 
   const filteredIssues = useMemo(() => {
-    if (activeFilter === "All") return issues;
-    return issues.filter((i) => i.severity === activeFilter);
-  }, [issues, activeFilter]);
+    let result = [...issues];
+    
+    // Sort: Pending issues first, then Completed
+    result.sort((a, b) => {
+      if (a.status === 'Completed' && b.status !== 'Completed') return 1;
+      if (a.status !== 'Completed' && b.status === 'Completed') return -1;
+      return new Date(b.created_at) - new Date(a.created_at);
+    });
+
+    // Apply Status Filter
+    if (statusFilter !== "All") {
+      result = result.filter((i) => i.status === statusFilter);
+    }
+
+    // Apply Priority Filter
+    if (priorityFilter !== "All") {
+      result = result.filter((i) => i.severity === priorityFilter);
+    }
+
+    return result;
+  }, [issues, statusFilter, priorityFilter]);
 
   const toggleForm = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -297,12 +325,21 @@ export default function IssuesScreen() {
 
   const startEdit = (item) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setEditingId(item.id);
     setTitle(item.title);
     setDescription(item.description);
+    setPriority(item.severity || "Medium");
     setImage(item.image);
-    setPriority(item.severity || "Medium"); // Use severity from item
-    setEditingId(item.id);
-    setIsFormVisible(true);
+    // Don't set setIsFormVisible(true) here, as it controls the top form
+  };
+
+  const cancelEdit = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setEditingId(null);
+    setTitle("");
+    setDescription("");
+    setPriority("Medium");
+    setImage(null);
   };
 
   return (
@@ -310,15 +347,8 @@ export default function IssuesScreen() {
       {/* HEADER */}
       <View style={styles.header}>
         <View style={styles.headerLeftContainer}>
-          <TouchableOpacity 
-            onPress={() => navigation.goBack()} 
-            style={styles.backButton}
-          >
-            <Ionicons name="arrow-back" size={24} color={COLORS.TEXT_PRIMARY} />
-          </TouchableOpacity>
           <View>
-            <Text style={styles.headerSubtitle}>{t('tenant')}</Text>
-            <Text style={styles.headerTitle}>{t('issues')}</Text>
+            <Text style={[styles.headerTitle, { textTransform: 'lowercase' }]}>{t('Issues')}</Text>
           </View>
         </View>
         
@@ -326,7 +356,7 @@ export default function IssuesScreen() {
           <TouchableOpacity style={styles.addButton} onPress={toggleForm}>
             <Ionicons
               name={isFormVisible ? "close" : "add"}
-              size={20}
+              size={18}
               color={COLORS.WHITE}
             />
             <Text style={styles.addButtonText}>
@@ -342,28 +372,38 @@ export default function IssuesScreen() {
       >
         {/* DASHBOARD STATS */}
         <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{stats.total}</Text>
+          <TouchableOpacity 
+            onPress={() => setStatusFilter("All")}
+            style={[
+              styles.statCard,
+              statusFilter === "All" && { borderColor: COLORS.PRIMARY, borderWidth: 2 }
+            ]}
+          >
+            <Text style={[styles.statNumber, statusFilter === "All" && { color: COLORS.PRIMARY }]}>{stats.total}</Text>
             <Text style={styles.statLabel}>{t('all')}</Text>
-          </View>
-          <View
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => setStatusFilter("Pending")}
             style={[
               styles.statCard,
               { borderLeftColor: COLORS.ERROR, borderLeftWidth: 3 },
+              statusFilter === "Pending" && { borderColor: COLORS.ERROR, borderWidth: 2 }
             ]}
           >
-            <Text style={styles.statNumber}>{stats.high}</Text>
-            <Text style={styles.statLabel}>{t('pending_count')}</Text>
-          </View>
-          <View
+            <Text style={[styles.statNumber, statusFilter === "Pending" && { color: COLORS.ERROR }]}>{stats.total - stats.resolved}</Text>
+            <Text style={styles.statLabel}>{t('pending')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => setStatusFilter("Completed")}
             style={[
               styles.statCard,
               { borderLeftColor: COLORS.SUCCESS, borderLeftWidth: 3 },
+              statusFilter === "Completed" && { borderColor: COLORS.SUCCESS, borderWidth: 2 }
             ]}
           >
-            <Text style={styles.statNumber}>{stats.resolved}</Text>
+            <Text style={[styles.statNumber, statusFilter === "Completed" && { color: COLORS.SUCCESS }]}>{stats.resolved}</Text>
             <Text style={styles.statLabel}>{t('completed')}</Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* COLLAPSIBLE FORM CARD */}
@@ -454,7 +494,7 @@ export default function IssuesScreen() {
 
         {/* LIST FILTERS */}
         <View style={styles.listHeaderRow}>
-          <Text style={styles.listTitle}>Active Tickets</Text>
+          <Text style={styles.listTitle}>Priority Filter</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -467,17 +507,17 @@ export default function IssuesScreen() {
                   LayoutAnimation.configureNext(
                     LayoutAnimation.Presets.easeInEaseOut,
                   );
-                  setActiveFilter(f);
+                  setPriorityFilter(f);
                 }}
                 style={[
                   styles.filterChip,
-                  activeFilter === f && { backgroundColor: COLORS.PRIMARY },
+                  priorityFilter === f && { backgroundColor: COLORS.PRIMARY },
                 ]}
               >
                 <Text
                   style={[
                     styles.filterText,
-                    activeFilter === f && { color: COLORS.WHITE },
+                    priorityFilter === f && { color: COLORS.WHITE },
                   ]}
                 >
                   {f}
@@ -500,18 +540,28 @@ export default function IssuesScreen() {
           </View>
         ) : (
           filteredIssues.map((item) => {
+            const isCompleted = item.status === "Completed";
             const pData =
               priorities.find((p) => p.label === item.severity) || priorities[1];
 
+            const statusColor = isCompleted ? COLORS.SUCCESS : pData.color;
+            const isEditing = editingId === item.id;
+
             return (
-              <View key={item.id} style={styles.issueCard}>
+              <View 
+                key={item.id} 
+                style={[
+                  styles.issueCard,
+                  isCompleted && { borderLeftColor: COLORS.SUCCESS, borderLeftWidth: 4 }
+                ]}
+              >
 
                 {/* STATUS & DATE */}
                 <View style={styles.issueTopRow}>
                   <View
                     style={[
                       styles.statusIndicator,
-                      { backgroundColor: pData.color },
+                      { backgroundColor: statusColor },
                     ]}
                   />
                   <Text style={styles.issueDate}>
@@ -519,66 +569,148 @@ export default function IssuesScreen() {
                   </Text>
                 </View>
 
-                {/* ISSUE DETAILS */}
-                <Text style={styles.issueTitle}>{item.title}</Text>
-                <Text style={styles.issueDesc}>{item.description}</Text>
+                {isEditing ? (
+                  /* INLINE EDIT FORM */
+                  <View style={styles.inlineForm}>
+                    <Text style={styles.inlineFormHeader}>Edit Issue</Text>
+                    
+                    <Text style={styles.inlineInputLabel}>Title</Text>
+                    <TextInput
+                      style={styles.inlineInput}
+                      value={title}
+                      onChangeText={setTitle}
+                      placeholder="Issue title"
+                    />
 
-                {item.image && (
-                  <Image
-                    source={{ uri: item.image.startsWith('http') ? item.image : `${BASE_URL}${item.image}` }}
-                    style={styles.issueImage}
-                  />
-                )}
+                    <Text style={styles.inlineInputLabel}>Description</Text>
+                    <TextInput
+                      style={[styles.inlineInput, { height: 80, textAlignVertical: "top" }]}
+                      multiline
+                      value={description}
+                      onChangeText={setDescription}
+                      placeholder="Issue description"
+                    />
 
-                {/* STATUS BADGE */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, marginBottom: 6 }}>
-                  <View style={[styles.statusDot, { backgroundColor: pData.color }]} />
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: pData.color }}>
-                    {formatLabel(item.status)}
-                  </Text>
-                </View>
+                    <Text style={styles.inlineInputLabel}>Severity</Text>
+                    <View style={styles.inlinePriorityGroup}>
+                      {priorities.map((p) => (
+                        <TouchableOpacity
+                          key={p.label}
+                          onPress={() => setPriority(p.label)}
+                          style={[
+                            styles.inlinePriorityChip,
+                            priority === p.label && {
+                              backgroundColor: p.color,
+                              borderColor: p.color,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.inlinePriorityText,
+                              priority === p.label && { color: COLORS.WHITE },
+                            ]}
+                          >
+                            {p.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
 
-                {/* OWNER RESPONSE */}
-                {item.owner_comment && (
-                  <View style={styles.ownerResponseBox}>
-                    <Text style={styles.ownerResponseTitle}>Owner Response:</Text>
-                    <Text style={styles.ownerResponseText}>{item.owner_comment}</Text>
+                    <Text style={styles.inlineInputLabel}>Image</Text>
+                    <View style={styles.inlineImageRow}>
+                      <TouchableOpacity style={styles.inlineAttachBtn} onPress={pickImage}>
+                        <Feather name="camera" size={16} color={COLORS.PRIMARY} />
+                        <Text style={styles.inlineAttachText}>{image ? "Change Photo" : "Add Photo"}</Text>
+                      </TouchableOpacity>
+                      {image && (
+                        <View style={styles.inlinePreviewContainer}>
+                          <Image 
+                            source={{ uri: image.startsWith('http') ? image : (image.startsWith('/') ? `${BASE_URL}${image}` : image) }} 
+                            style={styles.inlinePreviewImage} 
+                          />
+                          <TouchableOpacity style={styles.inlineRemoveImage} onPress={() => setImage(null)}>
+                            <Ionicons name="close-circle" size={20} color={COLORS.ERROR} />
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+
+                    <View style={styles.inlineFormFooter}>
+                      <TouchableOpacity style={styles.inlineCancelBtn} onPress={cancelEdit}>
+                        <Text style={styles.inlineCancelBtnText}>Cancel</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity style={styles.inlineSaveBtn} onPress={handleUpdate}>
+                        <Text style={styles.inlineSaveBtnText}>Save</Text>
+                        <Ionicons name="checkmark" size={16} color={COLORS.WHITE} style={{ marginLeft: 4 }} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                )}
+                ) : (
+                  <>
+                    {/* ISSUE DETAILS */}
+                    <Text style={styles.issueTitle}>{item.title}</Text>
+                    <Text style={styles.issueDesc}>{item.description}</Text>
 
-                {/* FOOTER */}
-                <View style={styles.issueFooter}>
-                  <View
-                    style={[
-                      styles.severityBadge,
-                      { backgroundColor: pData.bg },
-                    ]}
-                  >
-                    <Text style={[styles.severityText, { color: pData.color }]}>
-                      {item.severity || "Medium"} Severity
-                    </Text>
-                  </View>
-
-                  <View style={styles.actionButtons}>
-                    <TouchableOpacity
-                      onPress={() => startEdit(item)}
-                      style={styles.iconBtn}
-                    >
-                      <Feather
-                        name="edit-2"
-                        size={16}
-                        color={COLORS.TEXT_SECONDARY}
+                    {item.image && (
+                      <Image
+                        source={{ uri: item.image.startsWith('http') ? item.image : `${BASE_URL}${item.image}` }}
+                        style={styles.issueImage}
                       />
-                    </TouchableOpacity>
+                    )}
 
-                    <TouchableOpacity
-                      onPress={() => deleteIssue(item.id)}
-                      style={styles.iconBtn}
-                    >
-                      <Feather name="trash-2" size={16} color={COLORS.ERROR} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                    {/* STATUS BADGE */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, marginBottom: 6 }}>
+                      <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: statusColor }}>
+                        {formatLabel(item.status)}
+                      </Text>
+                    </View>
+
+                    {/* OWNER RESPONSE */}
+                    {item.owner_comment && (
+                      <View style={styles.ownerResponseBox}>
+                        <Text style={styles.ownerResponseTitle}>Owner Response:</Text>
+                        <Text style={styles.ownerResponseText}>{item.owner_comment}</Text>
+                      </View>
+                    )}
+
+                    {/* FOOTER */}
+                    <View style={styles.issueFooter}>
+                      <View
+                        style={[
+                          styles.severityBadge,
+                          { backgroundColor: pData.bg },
+                        ]}
+                      >
+                        <Text style={[styles.severityText, { color: pData.color }]}>
+                          {item.severity || "Medium"} Severity
+                        </Text>
+                      </View>
+
+                      <View style={styles.actionButtons}>
+                        <TouchableOpacity
+                          onPress={() => startEdit(item)}
+                          style={styles.iconBtn}
+                        >
+                          <Feather
+                            name="edit-2"
+                            size={16}
+                            color={COLORS.TEXT_SECONDARY}
+                          />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          onPress={() => deleteIssue(item.id)}
+                          style={styles.iconBtn}
+                        >
+                          <Feather name="trash-2" size={16} color={COLORS.ERROR} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </>
+                )}
               </View>
             );
           })
@@ -761,18 +893,26 @@ const styles = StyleSheet.create({
   },
   listTitle: {
     fontSize: 18,
-    fontWeight: "800",
+    fontWeight: "700",
     color: COLORS.TEXT_PRIMARY,
-    marginRight: 16,
+    marginRight: 12,
   },
-  filterScroll: { gap: 8, paddingRight: 20 },
+  filterScroll: { 
+    alignItems: 'center',
+    gap: 8, 
+    paddingRight: 20 
+  },
   filterChip: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: COLORS.BORDER,
+    borderRadius: 15,
+    backgroundColor: '#E2E8F0',
   },
-  filterText: { fontSize: 12, fontWeight: "700", color: COLORS.TEXT_SECONDARY },
+  filterText: { 
+    fontSize: 13, 
+    fontWeight: "600", 
+    color: COLORS.TEXT_SECONDARY 
+  },
 
   // Empty State
   emptyState: {
@@ -871,4 +1011,125 @@ const styles = StyleSheet.create({
 
   actionButtons: { flexDirection: "row", gap: 16 },
   iconBtn: { padding: 4 },
+
+  // Inline Form Styles
+  inlineForm: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginTop: 8,
+  },
+  inlineFormHeader: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: 12,
+  },
+  inlineInputLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.TEXT_SECONDARY,
+    marginBottom: 4,
+    textTransform: "uppercase",
+  },
+  inlineInput: {
+    backgroundColor: COLORS.WHITE,
+    borderWidth: 1,
+    borderColor: COLORS.BORDER,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: 12,
+  },
+  inlinePriorityGroup: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 16,
+  },
+  inlinePriorityChip: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.BORDER,
+    alignItems: "center",
+    backgroundColor: COLORS.WHITE,
+  },
+  inlinePriorityText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.TEXT_SECONDARY,
+  },
+  inlineFormFooter: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+  },
+  inlineCancelBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: COLORS.DIVIDER,
+  },
+  inlineCancelBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.TEXT_SECONDARY,
+  },
+  inlineSaveBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: COLORS.PRIMARY,
+  },
+  inlineSaveBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.WHITE,
+  },
+  inlineImageRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+    gap: 12,
+  },
+  inlineAttachBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.WHITE,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.BORDER,
+  },
+  inlineAttachText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.PRIMARY,
+    marginLeft: 6,
+  },
+  inlinePreviewContainer: {
+    position: "relative",
+  },
+  inlinePreviewImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.BORDER,
+  },
+  inlineRemoveImage: {
+    position: "absolute",
+    top: -8,
+    right: -8,
+    backgroundColor: COLORS.WHITE,
+    borderRadius: 10,
+  },
 });

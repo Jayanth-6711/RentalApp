@@ -110,7 +110,7 @@ const getUserLocation = async () => {
             galleryImages: galleryImages,
             
             facilities: item.facilities || [],
-            price: item.price || "5,000",
+            price: item.rent || "",
             ownerEmail: item.owner_email,
             ownerName: item.owner_name || "Owner",
             contact: item.contact || "No Contact",
@@ -276,7 +276,7 @@ matchesNearBy
               style={styles.card}
               onPress={() => navigation.navigate("PropertyDetailsScreen", { property: item })}
             >
-              <Image source={{ uri: item.image }} style={styles.cardImage} />
+              <Image source={{ uri: item.image || item.galleryImages?.[0] }} style={styles.cardImage} />
               <View style={styles.cardDetails}>
                 <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
                 <Text style={styles.cardAddress} numberOfLines={1}>{shortenAddress(item.address)}</Text>

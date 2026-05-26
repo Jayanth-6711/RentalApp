@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Image, Modal, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Image, Modal, Alert, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import * as Print from 'expo-print';
 import COLORS from '../../theme/colors';
 import BASE_URL, { fetchWithAuth } from '../../config/Api';
 
@@ -70,38 +71,83 @@ export default function OwnerPaymentHistoryScreen({ route, navigation }) {
         }
 
         try {
-            // Compile CSV content
-            let csvContent = "Tenant Name,Property Name,Amount,Payment Type,Date,Status,Transaction Ref\n";
-            payments.forEach(item => {
-                const isCash = item.txn_ref && String(item.txn_ref).startsWith('CASH-');
-                const paymentType = isCash ? 'Cash' : 'UPI';
-                const formattedDate = new Date(item.created_at).toLocaleDateString();
-                const tenantName = (item.tenant_name || 'Tenant').replace(/"/g, '""').replace(/,/g, ' ');
-                const propertyName = (item.property_name || 'N/A').replace(/"/g, '""').replace(/,/g, ' ');
-                const statusStr = (item.status || 'Pending').toUpperCase();
-                const txnRef = (item.txn_ref || '').replace(/"/g, '""').replace(/,/g, ' ');
-
-                csvContent += `"${tenantName}","${propertyName}",${item.amount},"${paymentType}","${formattedDate}","${statusStr}","${txnRef}"\n`;
-            });
-
             const monthNames = [
                 "January", "February", "March", "April", "May", "June",
                 "July", "August", "September", "October", "November", "December"
             ];
             const currentMonthName = monthNames[new Date().getMonth()];
-            const fileName = `Payment_Report_${currentMonthName}_${new Date().getFullYear()}.csv`;
-            const fileUri = FileSystem.documentDirectory + fileName;
+            
+            // Generate PDF content using HTML
+            let htmlContent = `
+                <html>
+                <head>
+                    <style>
+                        body { font-family: 'Helvetica', 'Arial', sans-serif; padding: 20px; }
+                        h1 { text-align: center; color: #333; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                        th { background-color: #f2f2f2; color: #333; }
+                        tr:nth-child(even) { background-color: #f9f9f9; }
+                        .status-success { color: green; font-weight: bold; }
+                        .status-pending { color: orange; font-weight: bold; }
+                        .total { font-weight: bold; font-size: 1.2em; text-align: right; margin-top: 20px; }
+                    </style>
+                </head>
+                <body>
+                    <h1>Payment Report - ${currentMonthName} ${new Date().getFullYear()}</h1>
+                    <table>
+                        <tr>
+                            <th>Tenant Name</th>
+                            <th>Property Name</th>
+                            <th>Amount</th>
+                            <th>Payment Type</th>
+                            <th>Date</th>
+                            <th>Status</th>
+                        </tr>
+            `;
 
-            await FileSystem.writeAsStringAsync(fileUri, csvContent, {
-                encoding: FileSystem.EncodingType.UTF8
+            let totalAmount = 0;
+
+            payments.forEach(item => {
+                const isCash = item.txn_ref && String(item.txn_ref).startsWith('CASH-');
+                const paymentType = isCash ? 'Cash' : 'UPI';
+                const formattedDate = new Date(item.created_at).toLocaleDateString();
+                const tenantName = (item.tenant_name || 'Tenant').replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                const propertyName = (item.property_name || 'N/A').replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                const statusStr = (item.status || 'Pending').toUpperCase();
+                const statusClass = (statusStr === 'SUCCESS' || statusStr === 'PAID' || statusStr === 'VERIFIED') ? 'status-success' : 'status-pending';
+
+                if (statusStr === 'SUCCESS' || statusStr === 'PAID' || statusStr === 'VERIFIED') {
+                    totalAmount += Number(item.amount) || 0;
+                }
+
+                htmlContent += `
+                    <tr>
+                        <td>${tenantName}</td>
+                        <td>${propertyName}</td>
+                        <td>₹${item.amount}</td>
+                        <td>${paymentType}</td>
+                        <td>${formattedDate}</td>
+                        <td class="${statusClass}">${statusStr}</td>
+                    </tr>
+                `;
             });
+
+            htmlContent += `
+                    </table>
+                    <div class="total">Total Collected: ₹${totalAmount}</div>
+                </body>
+                </html>
+            `;
+
+            const { uri } = await Print.printToFileAsync({ html: htmlContent });
 
             const isAvailable = await Sharing.isAvailableAsync();
             if (isAvailable) {
-                await Sharing.shareAsync(fileUri, {
-                    mimeType: 'text/csv',
-                    dialogTitle: `Download Payment Report for ${currentMonthName}`,
-                    UTI: 'public.comma-separated-values-text'
+                await Sharing.shareAsync(uri, {
+                    mimeType: 'application/pdf',
+                    dialogTitle: `Save Payment Report for ${currentMonthName}`,
+                    UTI: 'com.adobe.pdf'
                 });
             } else {
                 Alert.alert("Sharing Not Available", "Sharing is not available on this device.");

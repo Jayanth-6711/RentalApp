@@ -76,9 +76,9 @@ def jwt_required(allowed_roles=None):
             # Optionally fetch the actual user object and attach it to request.custom_user
             user_id = payload.get('user_id')
             if user_role == 'owner':
-                request.custom_user = Owners.objects.filter(id=user_id).first()
+                request.custom_user = Owners.objects.filter(pk=user_id).first()
             elif user_role == 'tenant':
-                request.custom_user = Tenent.objects.filter(id=user_id).first()
+                request.custom_user = Tenent.objects.filter(pk=user_id).first()
             elif user_role == 'admin':
                 request.custom_user = {'id': user_id, 'role': 'admin'}
                 

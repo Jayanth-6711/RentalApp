@@ -216,6 +216,7 @@ export default function TenantHomeScreen({ route }) {
 
           commercialType: item.commercialType || "",
           officeType: item.officeType || "",
+          rent: item.rent || "",
         };
       });
 
@@ -793,7 +794,7 @@ export default function TenantHomeScreen({ route }) {
                 >
                   <View style={homeStyles.card}>
                     <Image
-                      source={{ uri: item.galleryImages?.[0] || item.image }}
+                      source={{ uri: item.image || item.galleryImages?.[0] }}
                       style={homeStyles.cardImg}
                       resizeMode="cover"
                       onError={() => console.log("Card image failed:", item.image)}
@@ -821,6 +822,11 @@ export default function TenantHomeScreen({ route }) {
                       <Text style={homeStyles.cardSub} numberOfLines={2}>
                         {item.type} • {item.address}
                       </Text>
+                      {item.rent ? (
+                        <Text style={[homeStyles.cardSub, { fontWeight: "bold", color: "#6C63FF", marginTop: 4 }]}>
+                          ₹{item.rent} / month
+                        </Text>
+                      ) : null}
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -1565,7 +1571,7 @@ export function PropertyDetailsScreen(props) {
         contentContainerStyle={{ paddingBottom: 140 }}
       >
         <Image
-          source={{ uri: property.image }}
+          source={{ uri: property.image || property.galleryImages?.[0] }}
           style={styles.mainImage}
           onError={() => console.log("Main image failed:", property.image)}
         />
@@ -1589,6 +1595,12 @@ export function PropertyDetailsScreen(props) {
           <Text style={{ fontSize: 13, color: COLORS.TEXT_SECONDARY, marginTop: 4, fontWeight: "700" }}>
             Owned by {property.ownerName || "Owner"}
           </Text>
+          
+          {property.rent ? (
+            <Text style={{ fontSize: 18, color: COLORS.PRIMARY, marginTop: 10, fontWeight: "800" }}>
+              ₹{property.rent} / month
+            </Text>
+          ) : null}
 
           <Text style={styles.sectionTitle}>Facilities</Text>
 

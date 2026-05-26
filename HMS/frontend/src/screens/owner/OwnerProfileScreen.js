@@ -114,7 +114,7 @@ export default function OwnerProfile({ navigation }) {
   }, [loading, netProfit, totalIncome]);
 
   React.useEffect(() => {
-    if (coords && !animationFinished) {
+    if (coords && !animationFinished && totalIncome > 0 && totalExpenses > 0) {
       const animations = coinsAnim.map((coin, i) => {
         coin.anim.setValue({ x: coords.avatar.x, y: coords.avatar.y });
         coin.scale.setValue(0.3);
@@ -825,7 +825,7 @@ export default function OwnerProfile({ navigation }) {
                       padding: 2,
                       justifyContent: 'center',
                       alignItems: 'center',
-                     }}
+                    }}
                   >
                     <View style={{
                       width: '100%',

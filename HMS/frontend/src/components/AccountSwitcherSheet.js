@@ -179,7 +179,7 @@ const AccountSwitcherSheet = forwardRef(({
               const isActive = account.phone === activePhone;
               return (
                 <AccountRow
-                  key={account.phone || index}
+                  key={`${account.phone || 'acc'}-${index}`}
                   account={account}
                   isActive={isActive}
                   index={index}

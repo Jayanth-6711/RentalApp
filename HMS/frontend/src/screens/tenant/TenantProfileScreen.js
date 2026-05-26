@@ -28,7 +28,7 @@ const initialTenant = {
   name: "...",
   role: "Resident",
   phone: "...",
-  phone: "...",
+
   apartment: "...",
   location: "..."
 };
@@ -259,8 +259,6 @@ export default function TenantProfile({ navigation }) {
           <Text style={styles.sectionTitle}>{t("resident_details") || "Resident Details"}</Text>
           <View style={styles.infoCard}>
             <InfoItem icon="call-outline" label={t("phone") || "Phone"} value={tenantData.phone} color="#10B981" />
-            <View style={styles.divider} />
-            <InfoItem icon="mail-outline" label={t("phone") || "phone"} value={tenantData.phone} color="#F59E0B" />
             <View style={styles.divider} />
             <InfoItem icon="business-outline" label={t("property_name") || "Property Name"} value={tenantData.apartment} color="#6366F1" />
             <View style={styles.divider} />

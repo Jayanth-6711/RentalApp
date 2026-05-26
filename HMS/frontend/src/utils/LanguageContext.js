@@ -37,8 +37,19 @@ export const LanguageProvider = ({ children }) => {
     }
   };
 
+  const formatFallback = (str) => {
+    if (typeof str !== 'string') return str;
+    return str
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
+
   const t = (key) => {
-    return translations[language][key] || key;
+    if (translations[language] && translations[language][key]) {
+      return translations[language][key];
+    }
+    return formatFallback(key);
   };
 
   return (

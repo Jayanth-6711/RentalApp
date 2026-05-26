@@ -133,7 +133,7 @@ export default function WaitingScreen({ navigation, route }) {
         const msg = JSON.parse(e.data);
         console.log("[WaitingScreen] WS 📨 message:", msg);
 
-        if (msg.type === "status_update") {
+        if (msg.type === "account_status") {
           if (msg.status === "active") {
             setStatus("active");
             showBanner(t("approved_msg") || "🎉 Your account has been Approved!", "#10b981");

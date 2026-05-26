@@ -414,7 +414,7 @@ function RoleSection() {
     transform: [{ translateY: bubbleRightY.value }],
   }));
 
-  const SelectCard = ({ title, onPress, colors }) => {
+ const SelectCard = ({ title, onPress, colors, icon }) => {
     const scale = useSharedValue(1);
 
     const animatedStyle = useAnimatedStyle(() => ({
@@ -439,7 +439,16 @@ function RoleSection() {
             end={{ x: 1, y: 1 }}
             style={styles.gradientButton}
           >
-            <Text style={styles.selectCardTitle}>{title}</Text>
+            <View style={styles.buttonContent}>
+  <MaterialCommunityIcons
+    name={icon}
+    size={24}
+    color="#FFFFFF"
+    style={{ marginRight: 12 }}
+  />
+
+  <Text style={styles.selectCardTitle}>{title}</Text>
+</View>
           </LinearGradient>
         </AnimatedRN.View>
       </Pressable>
@@ -554,16 +563,18 @@ function RoleSection() {
         </Text>
 
         <SelectCard
-          title={t("continue_owner")}
-          colors={["#4A00E0", "#8E2DE2", "#6A5ACD"]}
-          onPress={() => navigation.navigate("OwnerLoginScreen")}
-        />
+  title={t("continue_owner")}
+  icon="shield-home"
+  colors={["#4A00E0", "#8E2DE2", "#6A5ACD"]}
+  onPress={() => navigation.navigate("OwnerLoginScreen")}
+/>
 
         <SelectCard
-          title={t("continue_tenant")}
-          colors={["#4A00E0", "#8E2DE2", "#6A5ACD"]}
-          onPress={() => navigation.navigate("TenantRegisterScreen")}
-        />
+  title={t("continue_tenant")}
+  icon="account"
+  colors={["#4A00E0", "#8E2DE2", "#6A5ACD"]}
+  onPress={() => navigation.navigate("TenantRegisterScreen")}
+/>
 
         <Text
           style={{
@@ -589,6 +600,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 18,
   },
+  
   primaryCard: { backgroundColor: THEME.PRIMARY, elevation: 8 },
   secondaryCard: {
     borderWidth: 2,
@@ -605,6 +617,11 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     elevation: 8,
   },
+  buttonContent: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+},
 
   selectCardTitle: {
     fontSize: 16,

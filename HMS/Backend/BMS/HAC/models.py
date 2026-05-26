@@ -1,6 +1,11 @@
 
 from django.db import models
 from django.utils import timezone
+import random
+import string
+
+def generate_owner_id():
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
 
 STAY_TYPE_CHOICES = [
     ('hostel', 'Hostel'),
@@ -25,6 +30,7 @@ STAY_TYPE_CHOICES = [
 #         return self.name
 
 class Owners(models.Model):
+    owner_id = models.CharField(max_length=10, primary_key=True, default=generate_owner_id, editable=False)
     name = models.CharField(max_length=150)
     phone = models.CharField(max_length=15, unique=True)
     password = models.CharField(max_length=255)
@@ -66,6 +72,8 @@ class StayHostelDetails(models.Model):
     hostelType = models.CharField(max_length=20, choices=HOSTEL_TYPE_CHOICES, blank=True, null=True)
     facilities = models.JSONField(blank=True, null=True)
     gallery_images = models.JSONField(blank=True, null=True)
+    rent_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    cover_image = models.ImageField(upload_to='property_covers/', null=True, blank=True)
  
     def __str__(self):
         return self.hostelName or "Hostel"
@@ -99,6 +107,15 @@ class ApartmentStayDetails(models.Model):
     tenantType = models.CharField(max_length=20, choices=TENANT_TYPE_CHOICES, null=True, blank=True)
     facilities = models.JSONField(blank=True, null=True)
     gallery_images = models.JSONField(blank=True, null=True)
+    
+    FURNISHING_CHOICES = [
+        ('Fully Furnished', 'Fully Furnished'),
+        ('Semi Furnished', 'Semi Furnished'),
+        ('Unfurnished', 'Unfurnished'),
+    ]
+    furnishing_type = models.CharField(max_length=20, choices=FURNISHING_CHOICES, null=True, blank=True)
+    rent_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    cover_image = models.ImageField(upload_to='property_covers/', null=True, blank=True)
  
     def __str__(self):
         return f"{self.apartmentName} - {self.bhk}"
@@ -125,6 +142,8 @@ class CommericialDetails(models.Model):
     usage = models.CharField(max_length=20, choices=USAGE_CHOICES, blank=True, null=True)
     facilities = models.JSONField(blank=True, null=True)
     gallery_images = models.JSONField(blank=True, null=True)
+    rent_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    cover_image = models.ImageField(upload_to='property_covers/', null=True, blank=True)
  
  
     def __str__(self):

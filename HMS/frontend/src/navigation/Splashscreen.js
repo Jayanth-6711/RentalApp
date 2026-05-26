@@ -119,8 +119,8 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   logo: {
-  width: 220,
-  height: 220,
+  width: 280,
+  height: 280,
 },
   title: {
     marginTop: 10,

@@ -17,6 +17,7 @@ from .models import (
 # 1️⃣ Owner Registration
 # ----------------------------
 class OwnerRegistrationSerializer(serializers.ModelSerializer):
+    id = serializers.CharField(source='owner_id', read_only=True)
     class Meta:
         model = Owners
         fields = [
@@ -71,7 +72,9 @@ class HostelSerializer(serializers.ModelSerializer):
             'facilities',
             'latitude',
             'longitude',
-            'gallery_images'
+            'gallery_images',
+            'rent_amount',
+            'cover_image'
         ]
 
 
@@ -112,7 +115,10 @@ class ApartmentSerializer(serializers.ModelSerializer):
             'facilities',
             'latitude',
             'longitude',
-            'gallery_images'
+            'gallery_images',
+            'furnishing_type',
+            'rent_amount',
+            'cover_image'
         ]
         extra_kwargs = {
             'owner': {'write_only': True}
@@ -155,8 +161,9 @@ class CommercialSerializer(serializers.ModelSerializer):
             'facilities',
             'latitude',
             'longitude',
-            'gallery_images'
-            # add other fields as needed
+            'gallery_images',
+            'rent_amount',
+            'cover_image'
         ]
         extra_kwargs = {'owner': {'write_only': True}}
 # ----------------------------

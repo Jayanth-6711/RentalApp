@@ -110,7 +110,7 @@ export default function OwnerCommercialSection({
       new Animated.Value(0),
     ]);
 
-    const initialForm = {
+const initialForm = {
       name: "",
       stayType: "",
       hostelType: "",
@@ -121,7 +121,6 @@ export default function OwnerCommercialSection({
       lift: "",
       apartmentName: "",
       bhk: "",
-      rent: "",
       tenantType: "",
       commercialName: "",
       usage: "",
@@ -133,7 +132,9 @@ export default function OwnerCommercialSection({
       cost: "",
       carParking: "",
       negotiable: "",
-      documents: { property: null, identityProof: null, homePics: [] },
+      rent: "",
+      furnishingType: "",
+      documents: { property: null, identityProof: null, homePics: [], coverImage: null },
       floorsData: [],
     };
     const [isLoading, setIsLoading] = useState(false);
@@ -201,7 +202,9 @@ export default function OwnerCommercialSection({
           ...form.documents,
           property: null,
           homePics: [],
+          coverImage: null,
         },
+        furnishingType: "",
         // clear floor data since it's type-specific
         floorsData: [],
       };
@@ -388,11 +391,29 @@ const validateStep1 = () => {
       return "";
     };
 
-    const validateStep2 = () => {
+const validateStep2 = () => {
       // Stay type must be selected
       if (!form.stayType) return false;
 
       let isValid = true;
+
+      // Validate cover image
+      if (!form.documents.coverImage) {
+        isValid = false;
+        setErrors((prev) => ({ ...prev, document_coverImage: "Cover image is required" }));
+      }
+
+      // Validate rent
+      if (!form.rent || isNaN(Number(form.rent)) || Number(form.rent) <= 0) {
+        isValid = false;
+        setErrors((prev) => ({ ...prev, rent: "Valid rent amount is required" }));
+      }
+
+      // Validate furnishing type for apartment
+      if (form.stayType === "apartment" && !form.furnishingType) {
+        isValid = false;
+        setErrors((prev) => ({ ...prev, furnishingType: "Furnishing type is required" }));
+      }
 
       // Validate based on stay type
       if (form.stayType === "hostel") {
@@ -531,61 +552,68 @@ const validateStep1 = () => {
       });
     };
 
-    const pickDoc = async (key) => {
-      const isMultiple = key === "homePics";
+const pickDoc = async (key) => {
+  const isMultiple = key === "homePics";
 
-      const res = await DocumentPicker.getDocumentAsync({
-        multiple: isMultiple,
-        type: "image/*", // only images as requested
+  const res = await DocumentPicker.getDocumentAsync({
+    multiple: isMultiple,
+    type: "image/*",
+  });
+
+  if (!res.canceled && res.assets && res.assets.length > 0) {
+    const newErrors = { ...errors };
+    let hasSizeError = false;
+
+    if (key === "coverImage") {
+      const asset = res.assets[0];
+      const isImage = asset.mimeType?.startsWith("image/");
+      if (!isImage) {
+        newErrors.document_coverImage = "Only images allowed";
+        setErrors(newErrors);
+        return;
+      }
+      if (asset.size > 5242880) {
+        newErrors.document_coverImage = "Image must be under 5MB";
+        setErrors(newErrors);
+        return;
+      }
+      delete newErrors.document_coverImage;
+      setForm({ ...form, documents: { ...form.documents, coverImage: asset } });
+      setErrors(newErrors);
+      return;
+    }
+
+    if (isMultiple) {
+      const validAssets = [];
+      res.assets.forEach((asset) => {
+        const isImage = asset.mimeType?.startsWith("image/");
+        if (!isImage) {
+          hasSizeError = true;
+          newErrors[`document_${key}`] = t("only_images_allowed");
+          return;
+        }
+        if (asset.size > 5242880) {
+          hasSizeError = true;
+          newErrors[`document_${key}`] = t("image_size_limit");
+        } else if (asset) {
+          validAssets.push(asset);
+        }
       });
 
-      if (!res.canceled && res.assets && res.assets.length > 0) {
-        const newErrors = { ...errors };
-        let hasSizeError = false;
-
-        if (isMultiple) {
-          const validAssets = [];
-
-          res.assets.forEach((asset) => {
-            const isImage = asset.mimeType?.startsWith("image/");
-
-            if (!isImage) {
-              hasSizeError = true;
-              newErrors[`document_${key}`] = t("only_images_allowed");
-              return;
-            }
-
-            // image size limit 5MB
-            if (asset.size > 5242880) {
-              hasSizeError = true;
-              newErrors[`document_${key}`] = t("image_size_limit");
-            } else if (asset) {
-              validAssets.push(asset);
-            }
-          });
-
-          if (validAssets.length > 0) {
-            const current = Array.isArray(form.documents.homePics)
-              ? form.documents.homePics
-              : [];
-
-            const updated = [...current, ...validAssets];
-
-            setForm({
-              ...form,
-              documents: { ...form.documents, homePics: updated },
-            });
-
-            if (!hasSizeError) {
-              delete newErrors[`document_${key}`];
-              delete newErrors.documents;
-            }
-          }
+      if (validAssets.length > 0) {
+        const current = Array.isArray(form.documents.homePics) ? form.documents.homePics : [];
+        const updated = [...current, ...validAssets];
+        setForm({ ...form, documents: { ...form.documents, homePics: updated } });
+        if (!hasSizeError) {
+          delete newErrors[`document_${key}`];
+          delete newErrors.documents;
         }
-
-        setErrors(newErrors);
       }
-    };
+    }
+
+    setErrors(newErrors);
+  }
+};
 
     const validateAndShowErrors = () => {
       const newErrors = {};
@@ -647,6 +675,17 @@ if (step === 1) {
           ) {
             newErrors.document_homePics = t("property_images_required");
           }
+          if (!form.documents.coverImage) {
+  newErrors.document_coverImage = "Cover image is required";
+}
+
+if (!form.rent || isNaN(Number(form.rent)) || Number(form.rent) <= 0) {
+  newErrors.rent = "Valid rent amount is required";
+}
+
+if (form.stayType === "apartment" && !form.furnishingType) {
+  newErrors.furnishingType = "Furnishing type is required";
+}
         }
       }
 
@@ -741,6 +780,16 @@ if (step === 1) {
               });
 
               formData.append("building_layout", JSON.stringify(form.floorsData || []));
+              formData.append("rent_amount", form.rent || "");
+formData.append("furnishing_type", form.furnishingType || "");
+
+if (form.documents.coverImage) {
+  formData.append("cover_image", {
+    uri: form.documents.coverImage.uri,
+    name: form.documents.coverImage.name || "cover.jpg",
+    type: form.documents.coverImage.mimeType || "image/jpeg",
+  });
+}
 
               if (Array.isArray(form.documents?.homePics) && form.documents.homePics.length > 0) {
                 form.documents.homePics.forEach((img, index) => {
@@ -1272,6 +1321,27 @@ if (step === 1) {
                                 {errors.facilities}
                               </Text>
                             ) : null}
+                            {/* Rent Amount */}
+<Text style={styles.label}>Monthly Rent / Property Amount</Text>
+<View style={[styles.inputContainer, styles.inputContainerStep2]}>
+  <Text style={{ color: LIGHT_PURPLE, fontWeight: "bold", fontSize: 18, marginRight: 8 }}>₹</Text>
+  <TextInput
+    style={[styles.input, errors.rent && styles.inputError, { flex: 1 }]}
+    placeholder="Enter amount"
+    placeholderTextColor="gray"
+    keyboardType="numeric"
+    value={form.rent}
+    onChangeText={(v) => {
+      const cleaned = v.replace(/[^0-9]/g, "");
+      setForm({ ...form, rent: cleaned });
+      if (cleaned && Number(cleaned) > 0) {
+        setErrors({ ...errors, rent: "" });
+      }
+    }}
+  />
+</View>
+{errors.rent ? <Text style={styles.errorText}>{errors.rent}</Text> : null}
+                            
                           </>
                         )}
 
@@ -1711,6 +1781,59 @@ if (step === 1) {
                                 {errors.facilities}
                               </Text>
                             ) : null}
+                            {/* Rent Amount */}
+<Text style={styles.label}>Monthly Rent / Property Amount</Text>
+<View style={[styles.inputContainer, styles.inputContainerStep2]}>
+  <Text style={{ color: LIGHT_PURPLE, fontWeight: "bold", fontSize: 18, marginRight: 8 }}>₹</Text>
+  <TextInput
+    style={[styles.input, errors.rent && styles.inputError, { flex: 1 }]}
+    placeholder="Enter amount"
+    placeholderTextColor="gray"
+    keyboardType="numeric"
+    value={form.rent}
+    onChangeText={(v) => {
+      const cleaned = v.replace(/[^0-9]/g, "");
+      setForm({ ...form, rent: cleaned });
+      if (cleaned && Number(cleaned) > 0) {
+        setErrors({ ...errors, rent: "" });
+      }
+    }}
+  />
+</View>
+{errors.rent ? <Text style={styles.errorText}>{errors.rent}</Text> : null}
+{/* Furnishing Type - Apartment only */}
+<Text style={styles.label}>Furnishing Type</Text>
+<View style={{ flexDirection: "row", marginBottom: 10, gap: 8 }}>
+  {["Fully Furnished", "Semi Furnished", "Unfurnished"].map((option) => (
+    <TouchableOpacity
+      key={option}
+      style={{
+        flex: 1,
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 2,
+        borderColor: form.furnishingType === option ? LIGHT_PURPLE : "#e5e7eb",
+        backgroundColor: form.furnishingType === option ? "#f5f3ff" : "#fff",
+        alignItems: "center",
+        elevation: form.furnishingType === option ? 3 : 1,
+      }}
+      onPress={() => {
+        setForm({ ...form, furnishingType: option });
+        setErrors({ ...errors, furnishingType: "" });
+      }}
+    >
+      <Text style={{
+        fontSize: 11,
+        fontWeight: "700",
+        color: form.furnishingType === option ? LIGHT_PURPLE : GRAY,
+        textAlign: "center",
+      }}>
+        {option}
+      </Text>
+    </TouchableOpacity>
+  ))}
+</View>
+{errors.furnishingType ? <Text style={styles.errorText}>{errors.furnishingType}</Text> : null}
                           </>
                         )}
 
@@ -2122,10 +2245,95 @@ if (step === 1) {
                                 {errors.facilities}
                               </Text>
                             ) : null}
+                            {/* Rent Amount */}
+<Text style={styles.label}>Monthly Rent / Property Amount</Text>
+<View style={[styles.inputContainer, styles.inputContainerStep2]}>
+  <Text style={{ color: LIGHT_PURPLE, fontWeight: "bold", fontSize: 18, marginRight: 8 }}>₹</Text>
+  <TextInput
+    style={[styles.input, errors.rent && styles.inputError, { flex: 1 }]}
+    placeholder="Enter amount"
+    placeholderTextColor="gray"
+    keyboardType="numeric"
+    value={form.rent}
+    onChangeText={(v) => {
+      const cleaned = v.replace(/[^0-9]/g, "");
+      setForm({ ...form, rent: cleaned });
+      if (cleaned && Number(cleaned) > 0) {
+        setErrors({ ...errors, rent: "" });
+      }
+    }}
+  />
+</View>
+{errors.rent ? <Text style={styles.errorText}>{errors.rent}</Text> : null}
                           </>
                         )}
 
                         {/* Home pictures (multiple) */}
+                        {/* ===== COVER IMAGE UPLOAD ===== */}
+{form.stayType !== "" && (
+  <View style={{ marginVertical: 10 }}>
+    <Text style={[styles.sectionTitle, { color: LIGHT_PURPLE }]}>Cover Image</Text>
+    <Text style={{ color: GRAY, fontSize: 12, marginBottom: 10 }}>
+      This image appears as the main banner on property cards
+    </Text>
+
+    {form.documents.coverImage ? (
+      <View style={{
+        borderRadius: 16,
+        overflow: "hidden",
+        borderWidth: 2,
+        borderColor: LIGHT_PURPLE,
+        marginBottom: 8,
+      }}>
+        <Image
+          source={{ uri: form.documents.coverImage.uri }}
+          style={{ width: "100%", height: 180, borderRadius: 14 }}
+          resizeMode="cover"
+        />
+        <View style={{ flexDirection: "row", padding: 8, gap: 8 }}>
+          <TouchableOpacity
+            style={[styles.btn, { flex: 1, backgroundColor: LIGHT_PURPLE }]}
+            onPress={() => pickDoc("coverImage")}
+          >
+            <Text style={{ color: "#fff", fontWeight: "600" }}>Replace Image</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.btn, { flex: 1, backgroundColor: "#dc2626" }]}
+            onPress={() => {
+              setForm({ ...form, documents: { ...form.documents, coverImage: null } });
+              setErrors({ ...errors, document_coverImage: "Cover image is required" });
+            }}
+          >
+            <Text style={{ color: "#fff", fontWeight: "600" }}>Remove</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    ) : (
+      <TouchableOpacity
+        style={{
+          borderWidth: 2,
+          borderColor: errors.document_coverImage ? "#dc2626" : LIGHT_PURPLE,
+          borderStyle: "dashed",
+          borderRadius: 16,
+          paddingVertical: 40,
+          alignItems: "center",
+          backgroundColor: "#f5f3ff",
+          marginBottom: 8,
+        }}
+        onPress={() => pickDoc("coverImage")}
+      >
+        <Ionicons name="image-outline" size={48} color={LIGHT_PURPLE} />
+        <Text style={{ color: LIGHT_PURPLE, fontWeight: "700", marginTop: 10, fontSize: 16 }}>
+          Upload Cover Image
+        </Text>
+        <Text style={{ color: GRAY, fontSize: 12, marginTop: 4 }}>Max 5MB • JPG, PNG</Text>
+      </TouchableOpacity>
+    )}
+    {errors.document_coverImage ? (
+      <Text style={styles.errorText}>{errors.document_coverImage}</Text>
+    ) : null}
+  </View>
+)}
                         {form.stayType !== "" && (
                           <View style={{ marginVertical: 5 }}>
                             <Text style={styles.label}>
@@ -5152,8 +5360,6 @@ if (step === 1) {
       color: NAVY,
     },
   });
-
-
 
 
 
