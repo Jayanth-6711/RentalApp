@@ -76,10 +76,12 @@ urlpatterns = [
     ),
     path('all-owners-data/', views.get_all_steps_data, name='all_owners_data'),
     path('update_status/', views.update_status),
+    path('update_building_layout/<str:phone>/', views.update_building_layout, name='update_building_layout'),
     path('tenantdetails/<str:phone>/', views.tenantdetails),
     path('tenantdetails/<str:phone>/', views.tenant_by_phone),
     path('owner-admin/', views.owner_admin_list),
     path('owner_data/<str:phone>/', views.get_owner_full_details),
+    path('owner_accounts/<str:phone>/', views.get_owner_accounts),
     path('owner-status/<str:phone>/', views.update_owner_status),
     path('check-owner-status/<str:phone>/', views.check_owner_status),
 

@@ -176,7 +176,7 @@ const AccountSwitcherSheet = forwardRef(({
             bounces={false}
           >
             {accounts.map((account, index) => {
-              const isActive = account.phone === activePhone;
+              const isActive = account.id === activePhone || (account.phone === activePhone && accounts.findIndex(a => a.id === activePhone || a.phone === activePhone) === index);
               return (
                 <AccountRow
                   key={`${account.phone || 'acc'}-${index}`}
@@ -282,10 +282,10 @@ function AccountRow({ account, isActive, index, onPress }) {
       {/* Account Info */}
       <View style={styles.accountInfo}>
         <Text style={[styles.accountName, isActive && styles.accountNameActive]} numberOfLines={1}>
-          {account.name || 'Owner'}
+          {account.name || 'Owner'} {account.property_name && account.property_name !== 'N/A' ? `(${account.property_name})` : ''}
         </Text>
         <Text style={styles.accountEmail} numberOfLines={1}>
-          {account.phone}
+          {account.phone} {account.property_type && account.property_type !== 'N/A' ? `• ${account.property_type}` : ''}
         </Text>
         {isActive && (
           <View style={styles.activeLabel}>

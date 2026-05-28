@@ -32,7 +32,7 @@ STAY_TYPE_CHOICES = [
 class Owners(models.Model):
     owner_id = models.CharField(max_length=10, primary_key=True, default=generate_owner_id, editable=False)
     name = models.CharField(max_length=150)
-    phone = models.CharField(max_length=15, unique=True)
+    phone = models.CharField(max_length=15)
     password = models.CharField(max_length=255)
     STATUS_CHOICES = [
         ('active', 'Active'),

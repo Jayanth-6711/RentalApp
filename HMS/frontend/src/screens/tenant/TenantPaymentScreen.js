@@ -361,7 +361,7 @@ const TenantPaymentScreen = () => {
       return;
     }
     let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: false, // Disabled cropping per user request
       quality: 0.8,
     });

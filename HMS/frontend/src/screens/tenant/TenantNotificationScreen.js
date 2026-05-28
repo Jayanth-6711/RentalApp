@@ -42,7 +42,7 @@ const TenantNotificationScreen = () => {
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
                     tenant_phone: tenantPhone,
-                    owner_email: item.owner_email || item.ownerEmail,
+                    owner_phone: item.owner_phone || item.ownerEmail,
                     property_name: item.propertyName || item.property_name,
                   }),
                 });

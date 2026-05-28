@@ -275,6 +275,7 @@ const OwnerNotificationScreen = ({ route }) => {
             {renderBadge("home-outline", item.propertyType)}
             {item.sharing && renderBadge("people-outline", `${item.sharing} sharing`)}
             {item.flat && renderBadge("business-outline", `Flat ${item.flat}`)}
+            {item.section && renderBadge("business-outline", `Section ${item.section}`)}
           </View>
         </View>
 

@@ -132,12 +132,12 @@ export default function OwnerLoginScreen({ navigation }) {
             Alert.alert("Welcome", "Login Successful");
 
             if (userData.token) await AsyncStorage.setItem("userToken", userData.token);
-            await AsyncStorage.setItem("ownerPhone", userData.user.phone);
+            await AsyncStorage.setItem("ownerPhone", userData.user.id);
             
             const raw = await AsyncStorage.getItem("loggedInOwnerAccounts");
             let accounts = raw ? JSON.parse(raw) : [];
-            if (!accounts.find(a => a.phone === userData.user.phone)) {
-              accounts.push({ phone: userData.user.phone, name: userData.user.name });
+            if (!accounts.find(a => a.id === userData.user.id)) {
+              accounts.push({ id: userData.user.id, phone: userData.user.phone, name: userData.user.name });
               await AsyncStorage.setItem("loggedInOwnerAccounts", JSON.stringify(accounts));
             }
 

@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import BASE_URL, { fetchWithAuth, WS_BASE_URL } from "@/src/config/Api";
 import { useLanguage } from "../../utils/LanguageContext";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function WaitingScreen({ navigation, route }) {
   const { t } = useLanguage();
@@ -20,7 +21,7 @@ export default function WaitingScreen({ navigation, route }) {
   const [timeLeft, setTimeLeft] = useState(0);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("pending");
-  const [reason, setReason] = useState("");
+  const [suspensionReason, setSuspensionReason] = useState("");
   const [wsStatus, setWsStatus] = useState("connecting");
 
   const [banner, setBanner] = useState(null);
@@ -66,20 +67,16 @@ export default function WaitingScreen({ navigation, route }) {
     }, delay);
   };
 
-  const fetchSuspensionReason = async () => {
-    try {
-      if (!isMounted.current || !phone) return;
-      const res = await fetchWithAuth(`${BASE_URL}/api/get_suspension_reason/${encodeURIComponent(phone)}/`);
-      const data = res.ok ? await res.json() : {};
-      if (isMounted.current) setReason(data.reason || "");
-    } catch (err) {
-      console.log("[WaitingScreen] fetchSuspensionReason error:", err);
-    }
-  };
+
 
   const fetchInitialStatus = async () => {
     try {
       if (!isMounted.current || !phone) return;
+
+      const storedReason = await AsyncStorage.getItem('ACCOUNT_SUSPEND_REASON');
+      if (storedReason && isMounted.current) {
+        setSuspensionReason(storedReason);
+      }
 
       const res = await fetchWithAuth(`${BASE_URL}/api/check-owner-status/${encodeURIComponent(phone)}/`);
       const data = res.ok ? await res.json() : {};
@@ -99,7 +96,20 @@ export default function WaitingScreen({ navigation, route }) {
 
       if (data.status === "suspend") {
         setStatus("suspend");
-        await fetchSuspensionReason();
+        const reason =
+          data?.reason ||
+          data?.message ||
+          route.params?.reason ||
+          '';
+
+        console.log('[WaitingScreen] Status:', data.status);
+        console.log('[WaitingScreen] Reason:', reason);
+        console.log('[WaitingScreen] API Response:', data);
+
+        if (reason) {
+          setSuspensionReason(reason);
+          await AsyncStorage.setItem('ACCOUNT_SUSPEND_REASON', reason);
+        }
       }
 
       setTimeLeft(Number(data.time_left_seconds) || 0);
@@ -140,12 +150,19 @@ export default function WaitingScreen({ navigation, route }) {
             navigateAfterDelay("OwnerLoginScreen", 2000);
           } else if (msg.status === "suspend") {
             setStatus("suspend");
-            const wsReason = msg.reason || "";
+            const wsReason =
+              msg?.reason ||
+              msg?.message ||
+              route.params?.reason ||
+              '';
+
             if (wsReason) {
-              setReason(wsReason);
-            } else {
-              setTimeout(() => fetchSuspensionReason(), 300);
+              setSuspensionReason(wsReason);
+              AsyncStorage.setItem('ACCOUNT_SUSPEND_REASON', wsReason).catch(console.error);
             }
+            console.log('[WaitingScreen] Status:', msg.status);
+            console.log('[WaitingScreen] Reason:', wsReason);
+            console.log('[WaitingScreen] API Response:', msg);
             showBanner(t("suspended_msg") || "⛔ Your account has been Suspended.", "#ef4444");
           }
         }
@@ -266,11 +283,9 @@ export default function WaitingScreen({ navigation, route }) {
         <View style={styles.reasonContainer}>
           <Text style={styles.suspendIcon}>⛔</Text>
           <Text style={styles.title}>{t("account_suspended") || "Account Suspended"}</Text>
-          {reason ? (
-            <Text style={styles.reasonText}>{(t("reason_label") || "Reason: {reason}").replace("{reason}", reason)}</Text>
-          ) : (
-            <Text style={styles.reasonText}>{t("not_accepted_msg") || "Your account application was not accepted."}</Text>
-          )}
+          <Text style={styles.reasonText}>
+            {suspensionReason || 'No reason provided by administrator'}
+          </Text>
           <TouchableOpacity style={styles.reRegisterButton} onPress={handleReRegister}>
             <Text style={styles.reRegisterButtonText}>{t("re_register") || "Re-Register"}</Text>
           </TouchableOpacity>
@@ -381,20 +396,31 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   reasonContainer: {
-    paddingHorizontal: 20,
     alignItems: "center",
+    padding: 24,
+    backgroundColor: "#fef2f2",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#fca5a5",
+    shadowColor: "#ef4444",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+    width: "100%",
   },
   suspendIcon: {
     fontSize: 52,
     marginBottom: 12,
   },
   reasonText: {
-    marginTop: 15,
-    fontSize: 18,
-    color: "#ef4444",
-    textAlign: "center",
-    fontWeight: "500",
-    lineHeight: 26,
+    color: '#B22222',
+    fontSize: 16,
+    textAlign: 'center',
+    paddingHorizontal: 24,
+    lineHeight: 24,
+    fontWeight: '600',
+    marginTop: 12,
   },
   reRegisterButton: {
     marginTop: 35,

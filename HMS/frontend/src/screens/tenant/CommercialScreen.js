@@ -192,10 +192,11 @@ const getUserLocation = async () => {
 
             category: item.category || "Office",
 
-            ownerEmail: item.owner_email || "",
             ownerName: item.owner_name || "Owner",
 
             contact: item.contact || "",
+            ownerPhone: item.owner_phone || "",
+            owner_id: item.owner_id || "",
 
             latitude: item.latitude
               ? parseFloat(item.latitude)

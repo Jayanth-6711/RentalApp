@@ -93,13 +93,21 @@ function Owners() {
       setError("");
 
       const response = await fetchWithAuth(`${BASE_URL}/api/owner-admin/`);
+      if (!response.ok) {
+        // If response is not JSON (e.g., HTML error page), read as text for debugging
+        const errorText = await response.text();
+        console.error('Fetch owners non-JSON error response:', errorText);
+        setError('Failed to fetch owner data');
+        setOwners([]);
+        setLoading(false);
+        return;
+      }
       const result = await response.json();
 
-      if (response.ok && result?.data) {
+      if (result?.data) {
         const formattedData = result.data.map((item, index) => ({
           id: item.id || index + 1,
           name: item.owner_name || "No Name",
-          phone: item.phone || "N/A",
           phone: item.phone || "N/A",
           property: item.property_type || "N/A",
           status: item.status || "pending",
@@ -109,8 +117,10 @@ function Owners() {
 
         setOwners(formattedData);
       } else {
+        const errorMsg = result?.error || "Failed to fetch owner data";
+        console.error('Fetch owners error:', errorMsg);
+        setError(errorMsg);
         setOwners([]);
-        setError(result?.error || "Failed to fetch owner data");
       }
     } catch (err) {
       console.error("Fetch owners error:", err);
@@ -345,7 +355,6 @@ function Owners() {
                 <tr>
                   <th style={thStyle}>Owner</th>
                   <th style={thStyle}>Phone</th>
-                  <th style={thStyle}>phone</th>
                   <th style={thStyle}>Property</th>
                   <th style={thStyle}>Status</th>
                   <th style={thStyle}>Date & Time</th>
@@ -395,7 +404,6 @@ function Owners() {
                           </div>
                         </td>
 
-                        <td style={tdStyle}>{owner.phone}</td>
                         <td style={tdStyle}>{owner.phone}</td>
                         <td style={tdStyle}>{owner.property}</td>
 

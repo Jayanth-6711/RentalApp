@@ -15,7 +15,9 @@ def send_push_notification(phone, title, body, data=None):
         user = Tenent.objects.get(phone=phone)
     except Tenent.DoesNotExist:
         try:
-            user = Owners.objects.get(phone=phone)
+            user = Owners.objects.filter(phone=phone).order_by('-created_at').first()
+            if not user:
+                raise Owners.DoesNotExist
         except Owners.DoesNotExist:
             print(f"Could not find user with phone {phone} to send push notification.")
             return False

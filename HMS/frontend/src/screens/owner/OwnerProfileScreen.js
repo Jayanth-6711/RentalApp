@@ -18,7 +18,11 @@ import {
   ActivityIndicator,
   Modal,
   Animated,
-  Easing
+  Easing,
+  PanResponder,
+  KeyboardAvoidingView,
+  TextInput,
+  Platform
 } from "react-native";
 
 export default function OwnerProfile({ navigation }) {
@@ -36,6 +40,11 @@ export default function OwnerProfile({ navigation }) {
 
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showLangModal, setShowLangModal] = useState(false);
+  const [showAiModal, setShowAiModal] = useState(false);
+  const [aiMessages, setAiMessages] = useState([
+    { id: '1', text: "Hello! I am your Rennto AI Assistant. Ask me anything about managing your project (e.g., adding tenants, editing building, payments).", sender: 'ai' }
+  ]);
+  const [aiInputText, setAiInputText] = useState("");
 
   const languages = [
     { id: 'en', name: 'English', subName: 'Default', icon: '🇺🇸' },
@@ -49,7 +58,6 @@ export default function OwnerProfile({ navigation }) {
     name: "Loading...",
     role: "Property Owner",
     phone: "Loading...",
-    phone: "Loading...",
     propertyName: "Loading...",
     location: "Loading..."
   };
@@ -62,6 +70,31 @@ export default function OwnerProfile({ navigation }) {
     structure: [],
   });
   const [profileImage, setProfileImage] = useState(null);
+
+  // --- AI Assistant Draggable State ---
+  const aiPan = useRef(new Animated.ValueXY()).current;
+  const aiPanResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (e, gestureState) => {
+        // Only trigger drag if it's a real drag, not a tap
+        return Math.abs(gestureState.dx) > 2 || Math.abs(gestureState.dy) > 2;
+      },
+      onPanResponderGrant: () => {
+        aiPan.setOffset({
+          x: aiPan.x._value,
+          y: aiPan.y._value
+        });
+        aiPan.setValue({ x: 0, y: 0 });
+      },
+      onPanResponderMove: Animated.event(
+        [null, { dx: aiPan.x, dy: aiPan.y }],
+        { useNativeDriver: false }
+      ),
+      onPanResponderRelease: () => {
+        aiPan.flattenOffset();
+      }
+    })
+  ).current;
 
   const scrollRef = useRef(null);
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -264,13 +297,14 @@ export default function OwnerProfile({ navigation }) {
   // ------------------------------
 
   // --- Multi-Account Storage Helper ---
-  const upsertCurrentAccount = async (phone, name, profileImg) => {
+  const upsertCurrentAccount = async (phoneOrId, name, profileImg, actualPhone) => {
     try {
       const raw = await AsyncStorage.getItem('loggedInOwnerAccounts');
       let accounts = raw ? JSON.parse(raw) : [];
-      const existingIndex = accounts.findIndex(a => a.phone === phone);
+      const existingIndex = accounts.findIndex(a => a.id === phoneOrId || a.phone === phoneOrId);
       const accountData = {
-        phone,
+        id: phoneOrId,
+        phone: actualPhone || phoneOrId,
         name: name || 'Owner',
         profileImage: profileImg || null,
         lastLogin: new Date().toISOString(),
@@ -317,14 +351,13 @@ export default function OwnerProfile({ navigation }) {
           name: data.step1.name,
           role: data.property_type ? `${data.property_type.charAt(0).toUpperCase() + data.property_type.slice(1)} Owner` : "Owner",
           phone: data.step1.phone,
-          phone: data.step1.phone,
           propertyName: data.step1.property_name || "New Property",
           location: data.step1.area || "Location missing"
         });
-        setProfileImage(data.step1.owner_img_field);
+        setProfileImage(data.step1.owner_img_field ? `${data.step1.owner_img_field}?t=${new Date().getTime()}` : null);
 
         // Upsert into multi-account storage
-        upsertCurrentAccount(phone, data.step1.name, data.step1.owner_img_field);
+        upsertCurrentAccount(phone, data.step1.name, data.step1.owner_img_field, data.step1.phone);
 
         const stats = data.stats || { total_beds: 0, occupied_beds: 0, total_rent: 0 };
         setProperty({
@@ -372,7 +405,7 @@ export default function OwnerProfile({ navigation }) {
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
@@ -455,6 +488,45 @@ export default function OwnerProfile({ navigation }) {
       </View>
     );
   }
+
+  const handleSendAiMessage = () => {
+    if (!aiInputText.trim()) return;
+    const userMsg = { id: Date.now().toString(), text: aiInputText.trim(), sender: 'user' };
+    setAiMessages(prev => [...prev, userMsg]);
+    setAiInputText("");
+
+    // Simulate AI response
+    setTimeout(() => {
+      let aiReply = "I'm still learning! Could you rephrase your question?";
+      const lowerQ = userMsg.text.toLowerCase();
+
+      if (lowerQ === 'hi' || lowerQ === 'hello' || lowerQ === 'hey') {
+        aiReply = "Hello! 👋 How can I help you manage your property today?";
+      } else if (lowerQ.includes('how are you')) {
+        aiReply = "I'm doing great, thank you! Ready to help you with Rennto. What do you need assistance with?";
+      } else if (lowerQ.includes('tenant') || lowerQ.includes('add')) {
+        aiReply = "To add a tenant, go to the Home tab and tap on an empty bed or room marked with a green '+' icon. Ensure you are not in Edit Building Mode.";
+      } else if (lowerQ.includes('edit') || lowerQ.includes('layout') || lowerQ.includes('building')) {
+        aiReply = "You can edit your building layout by tapping 'Edit Building' under Quick Actions here, or clicking the pencil icon at the top right of the Home tab.";
+      } else if (lowerQ.includes('pay') || lowerQ.includes('cash')) {
+        aiReply = "Navigate to the Payments tab. Select the pending tenant and click 'Mark as Paid'. Tenants can also upload UPI screenshots from their app.";
+      } else if (lowerQ.includes('expense') || lowerQ.includes('spend')) {
+        aiReply = "You can view recent expenses in your Profile tab and tap 'Add Expense' under Quick Actions to log new ones.";
+      } else if (lowerQ.includes('agent')) {
+        aiReply = "You can manage agents by clicking the 'Agents' button in your Account Settings (coming soon!).";
+      } else if (lowerQ.includes('issue') || lowerQ.includes('complain')) {
+        aiReply = "You can manage tenant issues from the 'Issues' section under Quick Actions in your Profile tab. You can mark them as resolved there.";
+      } else if (lowerQ.includes('remove') || lowerQ.includes('delete') || lowerQ.includes('vacate')) {
+        aiReply = "To remove a tenant, go to the Home tab, tap on their occupied bed, and click the red trash can icon to vacate the bed.";
+      } else if (lowerQ.includes('thank')) {
+        aiReply = "You're welcome! Let me know if you need anything else. 😊";
+      } else {
+        aiReply = "I'm still learning! Could you rephrase your question? Try asking about adding tenants, payments, expenses, or editing the layout.";
+      }
+
+      setAiMessages(prev => [...prev, { id: (Date.now() + 1).toString(), text: aiReply, sender: 'ai' }]);
+    }, 800);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
@@ -575,7 +647,7 @@ export default function OwnerProfile({ navigation }) {
               label={t("edit_building")}
               color="#7C3AED"
               bg="#F5F3FF"
-              onPress={() => navigation.navigate('OwnerNavigation', { screen: 'Home' })}
+              onPress={() => navigation.navigate('Home', { editMode: true })}
             />
             <QuickActionBtn
               icon="people-outline"
@@ -594,12 +666,92 @@ export default function OwnerProfile({ navigation }) {
           </View>
         </View>
 
+        {/* Recent Expenses */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{t("recent_expenses") || "Recent Expenses"}</Text>
+            {expenses.length > 3 && (
+              <TouchableOpacity onPress={() => setShowAllExpenses(!showAllExpenses)}>
+                <Text style={styles.viewReportText}>
+                  {showAllExpenses ? (t("show_less") || "Show Less") : (t("view_all") || "View All")}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          {expenses.length === 0 ? (
+            <View style={[styles.expensesCard, { padding: 24, alignItems: 'center' }]}>
+              <Ionicons name="receipt-outline" size={40} color="#D1D5DB" />
+              <Text style={{ fontSize: 15, color: '#9CA3AF', marginTop: 10, fontWeight: '600' }}>
+                {t("no_expenses") || "No expenses recorded yet"}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.expensesCard}>
+              {(showAllExpenses ? expenses : expenses.slice(0, 3)).map((item, idx) => {
+                const iconMap = {
+                  'Electricity': 'flash-outline',
+                  'Water': 'water-outline',
+                  'Maintenance': 'construct-outline',
+                  'Salary': 'people-outline',
+                  'Internet': 'wifi-outline',
+                  'Gas': 'flame-outline',
+                  'Insurance': 'shield-checkmark-outline',
+                  'Tax': 'document-text-outline',
+                };
+                const colorMap = {
+                  'Electricity': '#F59E0B',
+                  'Water': '#3B82F6',
+                  'Maintenance': '#8B5CF6',
+                  'Salary': '#10B981',
+                  'Internet': '#06B6D4',
+                  'Gas': '#EF4444',
+                  'Insurance': '#6366F1',
+                  'Tax': '#EC4899',
+                };
+                const bgMap = {
+                  'Electricity': '#FFFBEB',
+                  'Water': '#EFF6FF',
+                  'Maintenance': '#F5F3FF',
+                  'Salary': '#ECFDF5',
+                  'Internet': '#ECFEFF',
+                  'Gas': '#FEF2F2',
+                  'Insurance': '#EEF2FF',
+                  'Tax': '#FDF2F8',
+                };
+                const cat = item.category || 'Other';
+                const icon = iconMap[cat] || 'cash-outline';
+                const color = colorMap[cat] || '#6B7280';
+                const bg = bgMap[cat] || '#F3F4F6';
+
+                return (
+                  <View key={idx} style={styles.expenseItem}>
+                    <View style={styles.expenseLeft}>
+                      <View style={[styles.expenseIconBox, { backgroundColor: bg }]}>
+                        <Ionicons name={icon} size={22} color={color} />
+                      </View>
+                      <View>
+                        <Text style={styles.expenseCategory}>{cat}</Text>
+                        <Text style={styles.expenseDate}>
+                          {item.date
+                            ? new Date(item.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                            : (item.description || '')}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.expenseAmount}>-₹{Number(item.amount).toLocaleString()}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
+
         {/* Add Account Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t("manage_accounts") || "Manage Accounts"}</Text>
           <TouchableOpacity
             style={[styles.expensesCard, { flexDirection: 'row', alignItems: 'center', padding: 16, marginTop: 10, shadowColor: '#7C3AED' }]}
-            onPress={() => navigation.navigate('OwnerLoginScreen')}
+            onPress={() => navigation.navigate('OwnerRegistrationScreen', { phone: editableOwner.phone })}
           >
             <View style={[styles.expenseIconBox, { backgroundColor: '#F5F3FF' }]}>
               <Ionicons name="person-add-outline" size={24} color="#7C3AED" />
@@ -628,7 +780,6 @@ export default function OwnerProfile({ navigation }) {
               color="#10B981"
               onPress={() => setShowLangModal(true)}
             />
-
 
             <SettingsRow
               icon="log-out-outline"
@@ -940,6 +1091,105 @@ export default function OwnerProfile({ navigation }) {
           })}
         </Animated.View>
       )}
+
+      {/* Draggable AI Assistant FAB */}
+      <Animated.View
+        {...aiPanResponder.panHandlers}
+        style={[
+          styles.aiFab,
+          {
+            transform: [
+              { translateX: aiPan.x },
+              { translateY: aiPan.y }
+            ]
+          }
+        ]}
+      >
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => setShowAiModal(true)}
+          style={{ width: '100%', height: '100%' }}
+        >
+          <LinearGradient
+            colors={['#3B82F6', '#8B5CF6', '#D946EF']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.aiFabGradient}
+          >
+            <Ionicons name="sparkles" size={26} color="#FFF" />
+          </LinearGradient>
+        </TouchableOpacity>
+      </Animated.View>
+
+      {/* AI Assistant Modal */}
+      <Modal
+        visible={showAiModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowAiModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowAiModal(false)}
+        >
+          <TouchableOpacity activeOpacity={1} style={[styles.modalContent, { height: '80%', padding: 0 }]}>
+            <LinearGradient
+              colors={['#3B82F6', '#8B5CF6']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={{ padding: 20, borderTopLeftRadius: 24, borderTopRightRadius: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="sparkles" size={24} color="#FFF" style={{ marginRight: 8 }} />
+                <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#FFF' }}>Rennto AI FAQ</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowAiModal(false)}>
+                <Ionicons name="close-circle" size={28} color="rgba(255,255,255,0.8)" />
+              </TouchableOpacity>
+            </LinearGradient>
+
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+              <ScrollView style={{ flex: 1, padding: 16 }} showsVerticalScrollIndicator={false}>
+                {aiMessages.map(msg => (
+                  <View key={msg.id} style={{
+                    alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
+                    backgroundColor: msg.sender === 'user' ? '#3B82F6' : '#F3F4F6',
+                    padding: 12,
+                    borderRadius: 16,
+                    borderBottomRightRadius: msg.sender === 'user' ? 4 : 16,
+                    borderBottomLeftRadius: msg.sender === 'ai' ? 4 : 16,
+                    marginBottom: 12,
+                    maxWidth: '85%'
+                  }}>
+                    <Text style={{ fontSize: 15, color: msg.sender === 'user' ? '#FFF' : '#1F2937', lineHeight: 22 }}>
+                      {msg.text}
+                    </Text>
+                  </View>
+                ))}
+                <View style={{ height: 20 }} />
+              </ScrollView>
+              
+              <View style={{ flexDirection: 'row', padding: 12, borderTopWidth: 1, borderTopColor: '#E5E7EB', backgroundColor: '#FFF' }}>
+                <TextInput
+                  style={{ flex: 1, backgroundColor: '#F3F4F6', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, maxHeight: 100, color: '#1F2937' }}
+                  placeholder="Ask a question..."
+                  placeholderTextColor="#9CA3AF"
+                  value={aiInputText}
+                  onChangeText={setAiInputText}
+                  multiline
+                />
+                <TouchableOpacity
+                  style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#3B82F6', justifyContent: 'center', alignItems: 'center', marginLeft: 8 }}
+                  onPress={handleSendAiMessage}
+                >
+                  <Ionicons name="send" size={20} color="#FFF" style={{ marginLeft: 2 }} />
+                </TouchableOpacity>
+              </View>
+            </KeyboardAvoidingView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -977,6 +1227,27 @@ const SettingsRow = ({ icon, label, color, onPress, isLast }) => (
 );
 
 const styles = StyleSheet.create({
+  aiFab: {
+    position: 'absolute',
+    bottom: 40,
+    left: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    elevation: 8,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    zIndex: 999,
+  },
+  aiFabGradient: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   headerGradient: {
     paddingTop: 50,
     paddingBottom: 30,
@@ -1308,6 +1579,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#64748B',
+  },
+  faqItem: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  faqQuestion: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 6,
+  },
+  faqAnswer: {
+    fontSize: 14,
+    color: '#4B5563',
+    lineHeight: 20,
   }
 });
 

@@ -33,6 +33,23 @@ export default function OwnerNavigation({ route, navigation }) {
 
   const loadLoggedInAccounts = async () => {
     try {
+      const activeOwnerPhone = await AsyncStorage.getItem('ownerPhone');
+      if (activeOwnerPhone) {
+        const response = await fetchWithAuth(`${BASE_URL}/api/owner_accounts/${encodeURIComponent(activeOwnerPhone)}/`);
+        if (response.ok) {
+          const resData = await response.json();
+          if (resData && resData.accounts) {
+            setLoggedInAccounts(resData.accounts);
+            await AsyncStorage.setItem('loggedInOwnerAccounts', JSON.stringify(resData.accounts));
+            return;
+          }
+        }
+      }
+    } catch (e) {
+      console.log('Load accounts backend error:', e);
+    }
+
+    try {
       const raw = await AsyncStorage.getItem('loggedInOwnerAccounts');
       if (raw) {
         setLoggedInAccounts(JSON.parse(raw));
@@ -55,12 +72,12 @@ export default function OwnerNavigation({ route, navigation }) {
 
   const handleSwitchAccount = async (account) => {
     try {
-      await AsyncStorage.setItem('ownerPhone', account.phone);
+      await AsyncStorage.setItem('ownerPhone', account.id);
       bottomSheetRef.current?.close();
       setTimeout(() => {
         navigation.reset({
           index: 0,
-          routes: [{ name: 'OwnerNavigation', params: { phone: account.phone } }],
+          routes: [{ name: 'OwnerNavigation', params: { phone: account.id } }],
         });
       }, 350);
     } catch (e) {

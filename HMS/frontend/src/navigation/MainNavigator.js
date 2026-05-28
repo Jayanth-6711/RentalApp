@@ -26,6 +26,7 @@ import TenantPaymentScreen from "../screens/tenant/TenantPaymentScreen";
 import TenantProfileScreen from "../screens/tenant/TenantProfileScreen";
 import OwnerHomeScreen from "../screens/owner/OwnerHomeScreen";
 import OwnerEditTenantScreen from "../screens/owner/OwnerEditTenantScreen";
+import OwnerEditBuildingScreen from "../screens/owner/OwnerEditBuildingScreen";
 import PaymentScreen from "../screens/tenant/PaymentScreen";
 import WelcomeScreen from "../screens/tenant/WelcomeScreen";
  
@@ -70,6 +71,7 @@ export default function MainNavigator() {
 <Stack.Screen name="AddExpense" component={AddExpenseScreen} />
 <Stack.Screen name="PrivacySecurity" component={PrivacySecurityScreen} />
 <Stack.Screen name="Tenants" component={OwnerTenantsScreen} />
+<Stack.Screen name="OwnerEditBuilding" component={OwnerEditBuildingScreen} />
 <Stack.Screen name="OwnerPaymentHistory" component={OwnerPaymentHistoryScreen} />
 <Stack.Screen name="OwnerExpenseHistory" component={OwnerExpenseHistoryScreen} />
 <Stack.Screen

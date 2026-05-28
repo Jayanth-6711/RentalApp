@@ -21,7 +21,10 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
-  StatusBar
+  StatusBar,
+  PanResponder,
+  KeyboardAvoidingView,
+  Platform
 } from "react-native";
 
 const initialTenant = {
@@ -50,6 +53,36 @@ export default function TenantProfile({ navigation }) {
   const [showLangModal, setShowLangModal] = useState(false);
   const [tenantData, setTenantData] = useState(initialTenant);
   const [profileImage, setProfileImage] = useState(null);
+
+  // --- AI Assistant Draggable State & Chat ---
+  const [showAiModal, setShowAiModal] = useState(false);
+  const [aiMessages, setAiMessages] = useState([
+    { id: '1', text: "Hello! I am your Rennto AI Assistant. Ask me anything about using the app (e.g., issues, payments, hostels).", sender: 'ai' }
+  ]);
+  const [aiInputText, setAiInputText] = useState("");
+
+  const aiPan = useRef(new Animated.ValueXY()).current;
+  const aiPanResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (e, gestureState) => {
+        return Math.abs(gestureState.dx) > 2 || Math.abs(gestureState.dy) > 2;
+      },
+      onPanResponderGrant: () => {
+        aiPan.setOffset({
+          x: aiPan.x._value,
+          y: aiPan.y._value
+        });
+        aiPan.setValue({ x: 0, y: 0 });
+      },
+      onPanResponderMove: Animated.event(
+        [null, { dx: aiPan.x, dy: aiPan.y }],
+        { useNativeDriver: false }
+      ),
+      onPanResponderRelease: () => {
+        aiPan.flattenOffset();
+      }
+    })
+  ).current;
 
   // Edit Form States
   const [editName, setEditName] = useState("");
@@ -97,7 +130,9 @@ export default function TenantProfile({ navigation }) {
           console.log("IDENTITY IMAGE:", data.identityImage);
           console.log("TYPE:", typeof data.identityImage);
 
-          setProfileImage(data.identityImage);
+          setProfileImage(`${data.identityImage}?t=${new Date().getTime()}`);
+        } else {
+          setProfileImage(null);
         }
       }
     } catch (e) {
@@ -169,7 +204,7 @@ export default function TenantProfile({ navigation }) {
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
@@ -184,6 +219,38 @@ export default function TenantProfile({ navigation }) {
       quality: 0.8,
     });
     if (!result.canceled) setProfileImage(result.assets[0].uri);
+  };
+
+  const handleSendAiMessage = () => {
+    if (!aiInputText.trim()) return;
+    const userMsg = { id: Date.now().toString(), text: aiInputText.trim(), sender: 'user' };
+    setAiMessages(prev => [...prev, userMsg]);
+    setAiInputText("");
+
+    setTimeout(() => {
+      let aiReply = "I'm still learning! Could you rephrase your question?";
+      const lowerQ = userMsg.text.toLowerCase();
+
+      if (lowerQ === 'hi' || lowerQ === 'hello' || lowerQ === 'hey') {
+        aiReply = "Hello! 👋 How can I help you with your Rennto app today?";
+      } else if (lowerQ.includes('how are you')) {
+        aiReply = "I'm doing great, thank you! Ready to help you. What do you need assistance with?";
+      } else if (lowerQ.includes('issue') || lowerQ.includes('complain') || lowerQ.includes('problem')) {
+        aiReply = "You can report issues to your owner directly by going to the Notifications tab and tapping the '+' icon at the top right to raise a new issue.";
+      } else if (lowerQ.includes('pay') || lowerQ.includes('upi') || lowerQ.includes('screenshot')) {
+        aiReply = "To upload a payment screenshot, go to the Payment History tab in your Profile, tap on your pending payment, and use the upload button.";
+      } else if (lowerQ.includes('hostel') || lowerQ.includes('search') || lowerQ.includes('join')) {
+        aiReply = "Go to the Search (Hostel) tab at the bottom to find new properties and send a join request.";
+      } else if (lowerQ.includes('edit') || lowerQ.includes('profile')) {
+        aiReply = "You can edit your profile details or change your picture right here by tapping the pencil icon or your profile photo.";
+      } else if (lowerQ.includes('thank')) {
+        aiReply = "You're very welcome! Let me know if you need anything else. 😊";
+      } else {
+        aiReply = "I'm still learning! Could you rephrase your question? Try asking about issues, payments, or finding hostels.";
+      }
+
+      setAiMessages(prev => [...prev, { id: (Date.now() + 1).toString(), text: aiReply, sender: 'ai' }]);
+    }, 800);
   };
 
   const handleLogout = async () => {
@@ -499,6 +566,105 @@ export default function TenantProfile({ navigation }) {
               <Text style={styles.modalCancelText}>{t("cancel") || "Cancel"}</Text>
             </TouchableOpacity>
           </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Draggable AI Assistant FAB */}
+      <Animated.View
+        {...aiPanResponder.panHandlers}
+        style={[
+          styles.aiFab,
+          {
+            transform: [
+              { translateX: aiPan.x },
+              { translateY: aiPan.y }
+            ]
+          }
+        ]}
+      >
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => setShowAiModal(true)}
+          style={{ width: '100%', height: '100%' }}
+        >
+          <LinearGradient
+            colors={['#7A3FC4', '#9333EA', '#D946EF']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.aiFabGradient}
+          >
+            <Ionicons name="sparkles" size={26} color="#FFF" />
+          </LinearGradient>
+        </TouchableOpacity>
+      </Animated.View>
+
+      {/* AI Assistant Modal */}
+      <Modal
+        visible={showAiModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowAiModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowAiModal(false)}
+        >
+          <TouchableOpacity activeOpacity={1} style={[styles.modalContent, { height: '80%', padding: 0 }]}>
+            <LinearGradient
+              colors={['#7A3FC4', '#9333EA']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={{ padding: 20, borderTopLeftRadius: 24, borderTopRightRadius: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="sparkles" size={24} color="#FFF" style={{ marginRight: 8 }} />
+                <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#FFF' }}>Rennto AI Chat</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowAiModal(false)}>
+                <Ionicons name="close-circle" size={28} color="rgba(255,255,255,0.8)" />
+              </TouchableOpacity>
+            </LinearGradient>
+
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+              <ScrollView style={{ flex: 1, padding: 16 }} showsVerticalScrollIndicator={false}>
+                {aiMessages.map(msg => (
+                  <View key={msg.id} style={{
+                    alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
+                    backgroundColor: msg.sender === 'user' ? '#7A3FC4' : '#F3F4F6',
+                    padding: 12,
+                    borderRadius: 16,
+                    borderBottomRightRadius: msg.sender === 'user' ? 4 : 16,
+                    borderBottomLeftRadius: msg.sender === 'ai' ? 4 : 16,
+                    marginBottom: 12,
+                    maxWidth: '85%'
+                  }}>
+                    <Text style={{ fontSize: 15, color: msg.sender === 'user' ? '#FFF' : '#1F2937', lineHeight: 22 }}>
+                      {msg.text}
+                    </Text>
+                  </View>
+                ))}
+                <View style={{ height: 20 }} />
+              </ScrollView>
+              
+              <View style={{ flexDirection: 'row', padding: 12, borderTopWidth: 1, borderTopColor: '#E5E7EB', backgroundColor: '#FFF' }}>
+                <TextInput
+                  style={{ flex: 1, backgroundColor: '#F3F4F6', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, maxHeight: 100, color: '#1F2937' }}
+                  placeholder="Ask a question..."
+                  placeholderTextColor="#9CA3AF"
+                  value={aiInputText}
+                  onChangeText={setAiInputText}
+                  multiline
+                />
+                <TouchableOpacity
+                  style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#7A3FC4', justifyContent: 'center', alignItems: 'center', marginLeft: 8 }}
+                  onPress={handleSendAiMessage}
+                >
+                  <Ionicons name="send" size={20} color="#FFF" style={{ marginLeft: 2 }} />
+                </TouchableOpacity>
+              </View>
+            </KeyboardAvoidingView>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
     </View>
@@ -819,6 +985,27 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+  aiFab: {
+    position: 'absolute',
+    bottom: 40,
+    left: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    elevation: 8,
+    shadowColor: '#9333EA',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    zIndex: 999,
+  },
+  aiFabGradient: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  }
 });
 
 

@@ -202,10 +202,12 @@ const getUserLocation = async () => {
             price: item.rent || "",
             bhk: item.bhk || "2BHK",
 
-            ownerEmail: item.owner_email,
+            contact: item.owner_phone,
             ownerName: item.owner_name || "Owner",
 
             contact: item.contact || "No Contact",
+            ownerPhone: item.owner_phone,
+            owner_id: item.owner_id,
 
             latitude: item.latitude ? parseFloat(item.latitude) : null,
             longitude: item.longitude ? parseFloat(item.longitude) : null,

@@ -24,7 +24,6 @@ class OwnerRegistrationSerializer(serializers.ModelSerializer):
             'id',
             'name',
             'phone',
-            'phone',
             'password',
             'status'
         ]

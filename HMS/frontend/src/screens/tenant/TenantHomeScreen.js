@@ -235,7 +235,7 @@ export default function TenantHomeScreen({ route }) {
 
       const formatted = data.map((item) => ({
         ...item,
-        ownerEmail: item.owner_email,
+        ownerPhone: item.owner_phone,
       }));
 
       setRequests(formatted);
@@ -320,7 +320,8 @@ export default function TenantHomeScreen({ route }) {
           address: item.address || "No Address",
           contact: item.contact || "No Contact",
 
-          ownerEmail: item.owner_email,
+          ownerPhone: item.owner_phone,
+          owner_id: item.owner_id,
 
           latitude: item.latitude ? parseFloat(item.latitude) : null,
           longitude: item.longitude ? parseFloat(item.longitude) : null,
@@ -645,13 +646,13 @@ export default function TenantHomeScreen({ route }) {
     // 1. PRIORITY: ACCEPTED PROPERTIES
     const latestA = requests.find(r =>
       normalize(r.propertyName || r.property_name) === normalize(a.name) &&
-      normalize(r.ownerEmail || r.owner_email) === normalize(a.ownerEmail)
+      normalize(r.contact || r.owner_phone) === normalize(a.contact)
     );
     const isAcceptedA = latestA?.status === "accepted";
 
     const latestB = requests.find(r =>
       normalize(r.propertyName || r.property_name) === normalize(b.name) &&
-      normalize(r.ownerEmail || r.owner_email) === normalize(b.ownerEmail)
+      normalize(r.contact || r.owner_phone) === normalize(b.contact)
     );
     const isAcceptedB = latestB?.status === "accepted";
 
@@ -914,7 +915,7 @@ export default function TenantHomeScreen({ route }) {
 
               const latestReq = requests.find(r =>
                 normalize(r.propertyName || r.property_name) === normalize(item.name) &&
-                normalize(r.ownerEmail || r.owner_email) === normalize(item.ownerEmail)
+                normalize(r.contact || r.owner_phone) === normalize(item.contact)
               );
 
               const showBadge = latestReq && latestReq.status && latestReq.status !== 'none';
@@ -1282,10 +1283,10 @@ export function PropertyDetailsScreen(props) {
     const fetchStatus = async () => {
       try {
         const tenantPhone = await AsyncStorage.getItem("tenantPhone");
-        if (!tenantPhone || !property?.ownerEmail) return;
+        if (!tenantPhone || !property?.contact) return;
 
         const res = await fetchWithAuth(
-          `${BASE_URL}/api/check_request_status/${encodeURIComponent(tenantPhone)}/${encodeURIComponent(property.ownerEmail)}/${encodeURIComponent(property.name)}/`
+          `${BASE_URL}/api/check_request_status/${encodeURIComponent(tenantPhone)}/${encodeURIComponent(property.contact)}/${encodeURIComponent(property.name)}/`
         );
 
         const data = await res.json();
@@ -1550,6 +1551,7 @@ export function PropertyDetailsScreen(props) {
           },
           body: JSON.stringify({
             tenant_phone: tenantPhone,
+            owner_id: property.owner_id || "",
             owner_phone: property.contact,
 
             property_name: property.name,
@@ -1628,7 +1630,7 @@ export function PropertyDetailsScreen(props) {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        mediaTypes: ['images', 'videos'],
         allowsEditing: false,
         quality: 1,
       });
@@ -2261,7 +2263,7 @@ export function PropertyDetailsScreen(props) {
                     const normalize = (str) => (str || "").replace(/\s+/g, '').toLowerCase();
                     console.log("--- WITHDRAW ACTION START ---");
                     console.log("Property Name:", property.name);
-                    console.log("Owner Email:", property.ownerEmail);
+                    console.log("Owner Email:", property.contact);
                     console.log("Tenant Email:", tenantEmail);
 
                     // Optimistic update for immediate feedback in the list
@@ -2271,8 +2273,8 @@ export function PropertyDetailsScreen(props) {
                         const newRequests = prev.map(r => {
                           const rName = normalize(r.propertyName || r.property_name);
                           const pName = normalize(property.name);
-                          const rOwner = normalize(r.ownerEmail || r.owner_email);
-                          const pOwner = normalize(property.ownerEmail);
+                          const rOwner = normalize(r.contact || r.owner_phone);
+                          const pOwner = normalize(property.contact);
 
                           const nameMatch = rName === pName;
                           const ownerMatch = rOwner === pOwner;
@@ -2291,8 +2293,9 @@ export function PropertyDetailsScreen(props) {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({
-                        tenant_email: tenantEmail,
-                        owner_email: property.ownerEmail,
+                        tenant_phone: tenantPhone,
+                        owner_id: property.owner_id || "",
+                        owner_phone: property.contact,
                         property_name: property.name,
                       }),
                     });

@@ -150,7 +150,9 @@ def suspension_reason(request):
         return Response({"error": "phone is required"}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        owner = Owners.objects.get(phone=phone)
+        owner = Owners.objects.filter(Q(owner_id=phone) | Q(phone=phone)).order_by('-created_at').first()
+        if not owner:
+            raise Owners.DoesNotExist
         owner.suspension_reason = reason
         owner.save()
         return Response({"message": "Suspension reason saved successfully"}, status=status.HTTP_200_OK)
@@ -169,7 +171,9 @@ def get_suspension_reason(request, phone):
     Retrieves or deletes the suspension record for a specific owner.
     """
     try:
-        owner = Owners.objects.get(phone=phone)
+        owner = Owners.objects.filter(Q(owner_id=phone) | Q(phone=phone)).order_by('-created_at').first()
+        if not owner:
+            raise Owners.DoesNotExist
         
         if request.method == 'DELETE':
             owner.delete()
@@ -466,7 +470,9 @@ def save_push_token(request):
         if role == 'tenant':
             user = Tenent.objects.get(phone=phone)
         elif role == 'owner':
-            user = Owners.objects.get(phone=phone)
+            user = Owners.objects.filter(Q(owner_id=phone) | Q(phone=phone)).order_by('-created_at').first()
+            if not user:
+                raise Owners.DoesNotExist
         else:
             return Response({"error": "Invalid role"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -527,9 +533,17 @@ def owner_login(request):
         password = serializer.validated_data['password']
  
         try:
-            owner = Owners.objects.get(phone=phone)
-           
-            if owner.password != password:
+            owners = Owners.objects.filter(phone=phone)
+            if not owners.exists():
+                raise Owners.DoesNotExist
+            
+            owner = None
+            for o in owners:
+                if o.password == password:
+                    owner = o
+                    break
+            
+            if not owner:
                 return Response(
                     {"error": "Invalid Password"},
                     status=status.HTTP_400_BAD_REQUEST
@@ -599,7 +613,9 @@ def admin_login(request):
 def get_hostel_step3(request, phone):
 
     try:
-        owner = Owners.objects.get(phone=phone)
+        owner = Owners.objects.filter(Q(owner_id=phone) | Q(phone=phone)).order_by('-created_at').first()
+        if not owner:
+            raise Owners.DoesNotExist
     except Owners.DoesNotExist:
         return Response({"error": "Owner not found"}, status=404)
 
@@ -679,15 +695,22 @@ def get_hostel_step3(request, phone):
     # ================= COMMERCIAL =================
     elif commercial is not None:
 
-        floors = CommercialFloor.objects.filter(commercial_property=commercial)
+        floors = CommercialFloor.objects.filter(commercial_property=commercial).order_by('floorNo', 'sectionNo')
 
-        layout = []
-
+        layout_dict = {}
         for floor in floors:
-            layout.append({
-                "floorNo": floor.floorNo,
+            floor_no = floor.floorNo
+            if floor_no not in layout_dict:
+                layout_dict[floor_no] = []
+            layout_dict[floor_no].append({
+                "sectionNo": floor.sectionNo,
                 "area_sqft": floor.area_sqft
             })
+
+        layout = [
+            {"floorNo": floor_no, "sections": sections}
+            for floor_no, sections in layout_dict.items()
+        ]
 
         response_data = {
             "property_type": "commercial",
@@ -708,11 +731,10 @@ def get_hostel_step3(request, phone):
     #     "phone": owner.phone
     # }
     response_data["owner"] = {
-    "id": owner.pk,
-    "name": owner.name,
-    "phone": owner.phone,
-    "phone": owner.phone
-}
+        "id": owner.pk,
+        "name": owner.name,
+        "phone": owner.phone
+    }
 
     print("API Response:", response_data)
 
@@ -741,6 +763,7 @@ def get_properties_listing(request):
     "address": hostel.location,
     "contact": hostel.owner.phone if hostel.owner else None,
     "owner_phone": hostel.owner.phone if hostel.owner else None,
+    "owner_id": hostel.owner.owner_id if hostel.owner else None,
     "owner_name": hostel.owner.name if hostel.owner else None,
     "latitude": float(hostel.latitude) if hostel.latitude else None,
     "longitude": float(hostel.longitude) if hostel.longitude else None,
@@ -766,6 +789,7 @@ def get_properties_listing(request):
             "address": apartment.location,
             "contact": apartment.owner.phone if apartment.owner else None,
             "owner_phone": apartment.owner.phone if apartment.owner else None,
+            "owner_id": apartment.owner.owner_id if apartment.owner else None,
             "owner_name": apartment.owner.name if apartment.owner else None,
             "latitude": float(apartment.latitude) if apartment.latitude else None,
             "longitude": float(apartment.longitude) if apartment.longitude else None,
@@ -787,6 +811,7 @@ def get_properties_listing(request):
             "address": commercial.location,
             "contact": commercial.owner.phone if commercial.owner else None,
             "owner_phone": commercial.owner.phone if commercial.owner else None,
+            "owner_id": commercial.owner.owner_id if commercial.owner else None,
             "owner_name": commercial.owner.name if commercial.owner else None,
             "latitude": float(commercial.latitude) if commercial.latitude else None,
             "longitude": float(commercial.longitude) if commercial.longitude else None,
@@ -1464,13 +1489,14 @@ def tenant_profile_update(request, phone):
 @api_view(['PUT'])
 def owner_profile_update(request, phone):
     try:
-        # Robust lookup: strip spaces and case-insensitive
-        owner_phone = phone.strip()
-        owner = Owners.objects.filter(phone__iexact=owner_phone).first()
+        from django.db.models import Q
+        # Robust lookup: support both owner_id and phone
+        identifier = phone.strip()
+        owner = Owners.objects.filter(Q(owner_id=identifier) | Q(phone__iexact=identifier)).first()
        
         if not owner:
             return Response({
-                "message": f"Owner with phone {owner_phone} not found",
+                "message": f"Owner with ID/Phone {identifier} not found",
                 "error": "Owner not found"
             }, status=status.HTTP_404_NOT_FOUND)
  
@@ -1571,7 +1597,6 @@ def tenant_by_phone(request, phone):
         data = {
             "id": tenant.id,
             "name": tenant.name,
-            "phone": tenant.phone,
             "phone": tenant.phone,
             "gender": tenant.gender,
             "identityType": tenant.identityType,
@@ -1930,7 +1955,7 @@ def get_tenant_payment_details(request, phone):
                 else "Owner",
  
             "ownerPhone":
-                owner.phone,
+                owner.owner_id if owner.owner_id else owner.phone,
  
             "tenantName":
                 tenant.name if tenant.name
@@ -2036,7 +2061,6 @@ def owner_admin_list(request):
             "id": owner.pk,
             "owner_name": owner.name,
             "phone": owner.phone,
-            "phone": owner.phone,
             "property_type": p_type,
             "created_at": owner.created_at.isoformat() if owner.created_at else None,
             "status": owner.status
@@ -2057,7 +2081,9 @@ def owner_admin_list(request):
 @jwt_required()
 def get_owner_full_details(request, phone):
     try:
-        owner = Owners.objects.get(phone=phone)
+        owner = Owners.objects.filter(Q(owner_id=phone) | Q(phone=phone)).order_by('-created_at').first()
+        if not owner:
+            raise Owners.DoesNotExist
     except Owners.DoesNotExist:
         return Response(
             {"error": "Owner not found"},
@@ -2095,7 +2121,6 @@ def get_owner_full_details(request, phone):
     step1 = {
         "id": owner.pk,
         "name": owner.name if owner.name else "",
-        "phone": owner.phone if owner.phone else "",
         "phone": owner.phone if owner.phone else "",
         "status": owner.status if owner.status else "",
         "owner_img_field": build_file_url(
@@ -2279,11 +2304,14 @@ def get_owner_full_details(request, phone):
 @jwt_required()
 def update_owner_status(request, phone):
     try:
-        owner = Owners.objects.get(phone=phone)
+        owner = Owners.objects.filter(Q(owner_id=phone) | Q(phone=phone)).order_by('-created_at').first()
+        if not owner:
+            raise Owners.DoesNotExist
     except Owners.DoesNotExist:
         return Response({"error": "Owner not found"}, status=404)
  
     new_status = request.data.get("status")
+    suspension_reason = request.data.get("suspension_reason", "")
  
     if not new_status:
         return Response({"error": "Status required"}, status=400)
@@ -2297,8 +2325,22 @@ def update_owner_status(request, phone):
         }, status=400)
  
     owner.status = new_status
+    if suspension_reason:
+        owner.suspension_reason = suspension_reason
     owner.save()
-
+ 
+    # Create Notification in DB
+    notification_msg = f"Your account has been {owner.status} by admin."
+    if new_status == 'suspend' and suspension_reason:
+        notification_msg += f" Reason: {suspension_reason}"
+ 
+    Notification.objects.create(
+        recipient_phone=owner.owner_id,
+        title="Account Status Updated",
+        message=notification_msg,
+        type="ISSUE"
+    )
+ 
     # WebSocket: Notify Owner of status change
     try:
         channel_layer = get_channel_layer()
@@ -2310,13 +2352,14 @@ def update_owner_status(request, phone):
                 "content": {
                     "type": "account_status",
                     "status": owner.status,
-                    "message": f"Your account has been {owner.status} by admin."
+                    "message": notification_msg,
+                    "reason": suspension_reason
                 }
             }
         )
     except Exception as e:
         print(f"WS Status Notification Error: {e}")
-
+ 
     # WebSocket: Notify Public/Tenants to refresh property list if status changed
     try:
         channel_layer = get_channel_layer()
@@ -2332,21 +2375,21 @@ def update_owner_status(request, phone):
         )
     except Exception as e:
         print(f"WS Public Update Error: {e}")
-
+ 
     return Response({
         "message": "Status updated",
         "phone": owner.phone,
         "status": owner.status
-    })
- 
- 
+    }) 
  
  
  
 @api_view(['GET'])
 def check_owner_status(request, phone):
     try:
-        owner = Owners.objects.get(phone=phone)
+        owner = Owners.objects.filter(Q(owner_id=phone) | Q(phone=phone)).order_by('-created_at').first()
+        if not owner:
+            raise Owners.DoesNotExist
     except Owners.DoesNotExist:
         return Response({"error": "Owner not found"}, status=404)
  
@@ -2358,7 +2401,8 @@ def check_owner_status(request, phone):
  
     return Response({
         "status": owner.status,
-        "time_left_seconds": remaining_seconds
+        "time_left_seconds": remaining_seconds,
+        "reason": owner.suspension_reason or ""
     })
  
  
@@ -2415,20 +2459,17 @@ from asgiref.sync import async_to_sync
 @jwt_required()
 def send_join_request(request):
  
-    print("REQUEST DATA:", request.data)
- 
-    # ✅ PHONE BASED
-    tenant_phone = request.data.get(
-        "tenant_phone", ""
-    ).strip()
- 
-    owner_phone = request.data.get(
-        "owner_phone", ""
-    ).strip()
- 
-    property_name = request.data.get(
-        "property_name", ""
-    ).strip()
+    print("--- RAW REQUEST DATA ---")
+    print(dict(request.data))
+    
+    tenant_phone = request.data.get("tenant_phone", "").strip()
+    owner_id = request.data.get("owner_id", "").strip()
+    owner_phone = request.data.get("owner_phone", "").strip()
+    property_name = request.data.get("property_name", "").strip()
+    
+    print(f"Parsed -> Tenant: '{tenant_phone}', OwnerID: '{owner_id}', OwnerPhone: '{owner_phone}', Prop: '{property_name}'")
+    
+    lookup_id = owner_id if owner_id else owner_phone
  
     property_type = request.data.get(
         "property_type"
@@ -2457,12 +2498,12 @@ def send_join_request(request):
     print(
         f"SENDING JOIN REQUEST: "
         f"Tenant({tenant_phone}) "
-        f"-> Owner({owner_phone}) "
+        f"-> Owner({lookup_id}) "
         f"for {property_name}"
     )
  
     # ✅ VALIDATION
-    if not tenant_phone or not owner_phone:
+    if not tenant_phone or not lookup_id:
  
         return Response(
             {
@@ -2475,13 +2516,15 @@ def send_join_request(request):
     # ✅ GET TENANT & OWNER
     try:
  
-        tenant = Tenent.objects.get(
+        tenant = Tenent.objects.filter(
             phone=tenant_phone
-        )
+        ).first()
+        if not tenant:
+            raise Tenent.DoesNotExist
  
-        owner = Owners.objects.get(
-            phone=owner_phone
-        )
+        owner = Owners.objects.filter(Q(owner_id=lookup_id) | Q(phone=lookup_id)).order_by('-created_at').first()
+        if not owner:
+            raise Owners.DoesNotExist
  
     except Tenent.DoesNotExist:
  
@@ -2551,9 +2594,7 @@ def send_join_request(request):
  
         channel_layer = get_channel_layer()
  
-        sanitized_phone = owner_phone.replace(
-            "+", ""
-        )
+        sanitized_phone = owner.owner_id if owner.owner_id else (owner.phone.replace("+", "") if owner else "")
  
         for group in [
             f"owner_status_{sanitized_phone}",
@@ -2604,7 +2645,12 @@ def send_join_request(request):
 @jwt_required()
 def owner_requests(request, phone):
     try:
-        owner = Owners.objects.get(phone=phone)
+        if hasattr(request, 'custom_user') and request.custom_user and isinstance(request.custom_user, Owners):
+            owner = request.custom_user
+        else:
+            owner = Owners.objects.filter(Q(owner_id=phone) | Q(phone=phone)).order_by('-created_at').first()
+            if not owner:
+                raise Owners.DoesNotExist
     except Owners.DoesNotExist:
         return Response({"error": "Owner not found"}, status=404)
 
@@ -2666,7 +2712,7 @@ def tenant_notifications(request, identifier):
             "type": "JOIN_REQUEST",
             "propertyName": r.property_name,
             "status": r.status,
-            "owner_email": None,
+            "owner_phone": r.owner.owner_id if r.owner and r.owner.owner_id else (r.owner.phone if r.owner else None),
             "created_at": r.created_at,
         })
  
@@ -2718,7 +2764,7 @@ def create_issue(request):
  
         # Create Notification in DB
         notification = Notification.objects.create(
-            recipient_phone=owner.phone,
+            recipient_phone=owner.owner_id,
             title="New Issue Raised",
             message=f"{tenant.name} has raised a new issue: {issue.title}",
             type="ISSUE",
@@ -2728,7 +2774,7 @@ def create_issue(request):
         # Send WebSocket notification to owner
         try:
             channel_layer = get_channel_layer()
-            sanitized_phone = owner.phone.replace("+", "")
+            sanitized_phone = owner.owner_id if owner.owner_id else owner.phone.replace("+", "")
            
             for group in [f"owner_status_{sanitized_phone}", f"user_notifications_{sanitized_phone}"]:
                 async_to_sync(channel_layer.group_send)(
@@ -2776,7 +2822,12 @@ def tenant_issues(request, identifier):
 @jwt_required()
 def owner_issues(request, phone):
     try:
-        owner = Owners.objects.get(phone=phone)
+        if hasattr(request, 'custom_user') and request.custom_user and isinstance(request.custom_user, Owners):
+            owner = request.custom_user
+        else:
+            owner = Owners.objects.filter(Q(owner_id=phone) | Q(phone=phone)).order_by('-created_at').first()
+            if not owner:
+                raise Owners.DoesNotExist
     except Owners.DoesNotExist:
         return Response({"error": "Owner not found"}, status=404)
  
@@ -2918,7 +2969,9 @@ from django.db.models import Q
 def check_request_status(request, tenant_phone, owner_phone, property_name):
     try:
         tenant = Tenent.objects.get(phone=tenant_phone.strip())
-        owner = Owners.objects.get(phone=owner_phone.strip())
+        owner = Owners.objects.filter(Q(owner_id=owner_phone.strip()) | Q(phone=owner_phone.strip())).order_by('-created_at').first()
+        if not owner:
+            raise Owners.DoesNotExist
  
         stripped_name = property_name.strip()
  
@@ -2961,15 +3014,20 @@ def check_request_status(request, tenant_phone, owner_phone, property_name):
 @jwt_required()
 def withdraw_request(request):
     tenant_phone = (request.data.get("tenant_phone") or request.data.get("tenantPhone") or "").strip()
+    owner_id = (request.data.get("owner_id") or "").strip()
     owner_phone = (request.data.get("owner_phone") or request.data.get("ownerPhone") or "").strip()
     property_name = (request.data.get("property_name") or request.data.get("propertyName") or "").strip()
    
+    lookup_id = owner_id if owner_id else owner_phone
+   
     print("--- DB DIAGNOSTIC ---")
-    print(f"Targeting: Tenant({tenant_phone}), Owner({owner_phone}), Property({property_name})")
+    print(f"Targeting: Tenant({tenant_phone}), Owner({lookup_id}), Property({property_name})")
    
     try:
         tenant = Tenent.objects.get(phone=tenant_phone)
-        owner = Owners.objects.get(phone=owner_phone)
+        owner = Owners.objects.filter(Q(owner_id=lookup_id) | Q(phone=lookup_id)).order_by('-created_at').first()
+        if not owner:
+            raise Owners.DoesNotExist
        
         print(f"   [BACKEND] Found Tenant: {tenant.name}, Owner: {owner.name}")
        
@@ -3177,10 +3235,15 @@ def create_payment(request):
             else:
                 tenant_name = tenant_phone.split('@')[0] if tenant_phone else "Unknown"
  
+        # Resolve owner phone in case owner_id is passed
+        owner_identifier = data.get('owner_phone', '').strip()
+        owner = Owners.objects.filter(Q(owner_id=owner_identifier) | Q(phone=owner_identifier)).first()
+        actual_owner_id = owner.owner_id if owner else owner_identifier
+
         payment = Payment.objects.create(
             tenant_phone=tenant_phone,
             tenant_name=tenant_name,
-            owner_phone=data.get('owner_phone'),
+            owner_phone=actual_owner_id,
             owner_name=data.get('owner_name'),
             property_name=data.get('property_name'),
             upi_id=data.get('upi_id'),
@@ -3312,12 +3375,17 @@ def get_owner_payments(request, phone):
     Fetch all payments and active tenants for an owner.
     """
     try:
-        # 1. Get actual payment records
-        payments = list(Payment.objects.filter(owner_phone__iexact=phone).order_by('-created_at'))
+        owner = Owners.objects.filter(Q(owner_id=phone) | Q(phone=phone)).first()
+        if owner:
+            payments = list(Payment.objects.filter(
+                Q(owner_phone__iexact=owner.owner_id) | Q(owner_phone__iexact=owner.phone)
+            ).order_by('-created_at'))
+        else:
+            payments = list(Payment.objects.filter(owner_phone__iexact=phone).order_by('-created_at'))
        
         # 2. Get active tenants (accepted or allotted)
         active_requests = JoinRequest.objects.filter(
-            owner__phone__iexact=phone,
+            owner=owner,
             status__in=['accepted', 'allotted']
         )
        
@@ -3339,7 +3407,7 @@ def get_owner_payments(request, phone):
                     for table in [TenantBeds, ApartmentTenantBeds, CommercialTenantBeds]:
                         record = table.objects.filter(
                             (Q(phone__iexact=tenant_phone) | Q(phone__iexact=tenant_phone)),
-                            owner_phone__iexact=phone
+                            Q(owner_phone__iexact=(owner.owner_id if owner else phone)) | Q(owner_phone__iexact=(owner.phone if owner else phone))
                         ).order_by('-id').first()
                         if record and record.rent:
                             rent_amount = float(record.rent)
@@ -3449,7 +3517,7 @@ def upload_payment_screenshot(request):
                     payment = Payment.objects.create(
                         tenant_phone=phone,
                         tenant_name=tenant_obj.name,
-                        owner_phone=latest_req.owner.phone,
+                        owner_phone=latest_req.owner.owner_id,
                         owner_name=latest_req.owner.name,
                         property_name=latest_req.property_name,
                         amount=request.data.get('amount', 0),
@@ -3480,7 +3548,8 @@ def upload_payment_screenshot(request):
                 )
  
                 channel_layer = get_channel_layer()
-                sanitized_phone = owner_phone.replace("@", "_").replace(".", "_")
+                owner = Owners.objects.filter(Q(owner_id=owner_phone) | Q(phone=owner_phone)).first()
+                sanitized_phone = owner.owner_id if owner and owner.owner_id else owner_phone.replace("@", "_").replace(".", "_")
                
                 for group in [f"owner_status_{sanitized_phone}", f"user_notifications_{sanitized_phone}"]:
                     async_to_sync(channel_layer.group_send)(
@@ -3567,7 +3636,7 @@ def cash_payment(request):
             payment = Payment.objects.create(
                 tenant_phone=phone,
                 tenant_name=tenant_obj.name or phone.split('@')[0],
-                owner_phone=latest_req.owner.phone,
+                owner_phone=latest_req.owner.owner_id,
                 owner_name=latest_req.owner.name,
                 property_name=latest_req.property_name,
                 amount=amount or 0,
@@ -3603,7 +3672,8 @@ def cash_payment(request):
                 )
  
                 channel_layer = get_channel_layer()
-                sanitized_phone = owner_phone.replace("@", "_").replace(".", "_")
+                owner = Owners.objects.filter(Q(owner_id=owner_phone) | Q(phone=owner_phone)).first()
+                sanitized_phone = owner.owner_id if owner and owner.owner_id else owner_phone.replace("@", "_").replace(".", "_")
                
                 for group in [f"owner_status_{sanitized_phone}", f"user_notifications_{sanitized_phone}"]:
                     async_to_sync(channel_layer.group_send)(
@@ -3708,7 +3778,7 @@ def get_owner_expenses(request, phone):
     try:
         if phone:
             phone = phone.strip()
-        owner = Owners.objects.filter(phone__iexact=phone).first()
+        owner = Owners.objects.filter(Q(owner_id=phone) | Q(phone__iexact=phone)).first()
         if not owner:
             return Response({"error": "Owner not found"}, status=404)
             
@@ -3729,9 +3799,9 @@ def add_expense(request):
         if phone:
             phone = phone.strip()
         print(f"ADD EXPENSE PHONE: '{phone}'")
-        owner = Owners.objects.filter(phone__iexact=phone).first()
+        owner = Owners.objects.filter(Q(owner_id=phone) | Q(phone__iexact=phone)).first()
         if not owner:
-            return Response({"error": f"Owner not found for phone: {phone}"}, status=404)
+            return Response({"error": f"Owner not found for phone/id: {phone}"}, status=404)
             
         data = request.data.copy()
         data['owner'] = owner.pk
@@ -3786,7 +3856,6 @@ def get_owner_tenants(request, phone):
                 "id": t.id,
                 "name": t.name,
                 "phone": t.phone,
-                "phone": t.phone,
                 "room": f"Room {t.roomno}",
                 "property_type": "Hostel",
                 "rent": t.rent,
@@ -3800,7 +3869,6 @@ def get_owner_tenants(request, phone):
                 "id": t.id,
                 "name": t.name,
                 "phone": t.phone,
-                "phone": t.phone,
                 "room": f"Flat {t.flatno}",
                 "property_type": "Apartment",
                 "rent": t.rent,
@@ -3813,7 +3881,6 @@ def get_owner_tenants(request, phone):
             tenants_list.append({
                 "id": t.id,
                 "name": t.name,
-                "phone": t.phone,
                 "phone": t.phone,
                 "room": f"Section {t.sectionNo}",
                 "property_type": "Commercial",
@@ -3833,9 +3900,15 @@ def get_notifications(request, phone):
     Get all notifications for a user (owner/tenant).
     """
     try:
-        notifications = Notification.objects.filter(
-            recipient_phone__iexact=phone
-        ).order_by('-created_at')
+        owner = Owners.objects.filter(Q(owner_id=phone) | Q(phone=phone)).first()
+        if owner:
+            notifications = Notification.objects.filter(
+                Q(recipient_phone__iexact=owner.owner_id) | Q(recipient_phone__iexact=owner.phone)
+            ).order_by('-created_at')
+        else:
+            notifications = Notification.objects.filter(
+                recipient_phone__iexact=phone
+            ).order_by('-created_at')
         
         data = []
         for n in notifications:
@@ -4079,3 +4152,130 @@ def check_owner(request, phone):
         }, status=500)
 
 
+@api_view(['GET'])
+def get_owner_accounts(request, phone):
+    try:
+        owner = Owners.objects.filter(Q(owner_id=phone) | Q(phone=phone)).first()
+        actual_phone = owner.phone if owner else phone
+        
+        owners = Owners.objects.filter(phone=actual_phone).order_by('created_at')
+        data = []
+        for o in owners:
+            p_type = "N/A"
+            p_name = "N/A"
+            hostel = StayHostelDetails.objects.filter(owner=o).first()
+            if hostel:
+                p_type = "Hostel"
+                p_name = hostel.hostelName
+            else:
+                apartment = ApartmentStayDetails.objects.filter(owner=o).first()
+                if apartment:
+                    p_type = "Apartment"
+                    p_name = apartment.apartmentName
+                else:
+                    commercial = CommericialDetails.objects.filter(owner=o).first()
+                    if commercial:
+                        p_type = "Commercial"
+                        p_name = commercial.commercialName
+            
+            data.append({
+                "id": o.pk,
+                "name": o.name,
+                "phone": o.phone,
+                "property_type": p_type,
+                "property_name": p_name,
+                "status": o.status
+            })
+        return Response({"accounts": data}, status=200)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+
+
+
+@api_view(['PATCH'])
+@jwt_required()
+def update_building_layout(request, phone):
+    """
+    Updates the building layout (floors, rooms/flats/sections) for an owner's property.
+    """
+    try:
+        from django.db import transaction
+        owner = Owners.objects.filter(Q(owner_id=phone) | Q(phone__iexact=phone)).first()
+        if not owner:
+            return Response({"error": "Owner not found"}, status=404)
+
+        building_layout = request.data.get("building_layout")
+        stay_type = request.data.get("stay_type")
+
+        if not building_layout or not stay_type:
+            return Response({"error": "Missing building_layout or stay_type"}, status=400)
+
+        try:
+            if isinstance(building_layout, str):
+                layout = json.loads(building_layout)
+            else:
+                layout = building_layout
+        except json.JSONDecodeError:
+            return Response({"error": "Invalid building_layout JSON"}, status=400)
+
+        with transaction.atomic():
+            if stay_type == "hostel":
+                property_obj = StayHostelDetails.objects.filter(owner=owner).first()
+                if not property_obj:
+                    return Response({"error": "Property not found"}, status=404)
+                
+                HostelFloorRoom.objects.filter(owner=owner).delete()
+                
+                for floor_data in layout:
+                    floor_no = floor_data.get("floorNo")
+                    for room in floor_data.get("rooms", []):
+                        HostelFloorRoom.objects.create(
+                            owner=owner,
+                            hostel=property_obj,
+                            floor=floor_no,
+                            roomNo=room.get("roomNo"),
+                            sharing=room.get("beds")
+                        )
+
+            elif stay_type == "apartment":
+                property_obj = ApartmentStayDetails.objects.filter(owner=owner).first()
+                if not property_obj:
+                    return Response({"error": "Property not found"}, status=404)
+                
+                ApartmentFloorUnit.objects.filter(owner=owner).delete()
+                
+                for floor_data in layout:
+                    floor_no = floor_data.get("floorNo")
+                    for flat in floor_data.get("flats", []):
+                        ApartmentFloorUnit.objects.create(
+                            owner=owner,
+                            apartment=property_obj,
+                            floor=floor_no,
+                            flatNo=flat.get("flatNo"),
+                            bhk=flat.get("bhk")
+                        )
+
+            elif stay_type == "commercial":
+                property_obj = CommericialDetails.objects.filter(owner=owner).first()
+                if not property_obj:
+                    return Response({"error": "Property not found"}, status=404)
+                
+                CommercialFloor.objects.filter(owner=owner).delete()
+                
+                for floor_data in layout:
+                    floor_no = floor_data.get("floorNo")
+                    for section in floor_data.get("sections", []):
+                        CommercialFloor.objects.create(
+                            owner=owner,
+                            commercial_property=property_obj,
+                            floorNo=floor_no,
+                            sectionNo=section.get("sectionNo"),
+                            area_sqft=section.get("area_sqft")
+                        )
+            else:
+                return Response({"error": "Invalid stay_type"}, status=400)
+
+        return Response({"message": "Building layout updated successfully"}, status=200)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
