@@ -3,6 +3,8 @@ import { Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLanguage } from '../utils/LanguageContext';
 import BASE_URL, { fetchWithAuth } from "../config/Api";
+import { Audio } from "expo-av";
+import * as Haptics from "expo-haptics";
 
 export const BookingContext = createContext();
 
@@ -13,6 +15,29 @@ export const BookingProvider = ({ children }) => {
   const [clearedIds, setClearedIds] = useState([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const ws = useRef(null);
+
+  // --- Audio Player State ---
+  const [sound, setSound] = useState();
+
+  async function playSound() {
+    try {
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        require("../../assets/notification.wav")
+      );
+      setSound(newSound);
+      await newSound.playAsync();
+    } catch (error) {
+      console.log("Error playing sound:", error);
+    }
+  }
+
+  useEffect(() => {
+    return sound
+      ? () => {
+        sound.unloadAsync();
+      }
+      : undefined;
+  }, [sound]);
 
   // 1. Initial Data Load
   useEffect(() => {
@@ -41,7 +66,7 @@ export const BookingProvider = ({ children }) => {
       // but usually the ownerPhone is stored for owners
       const isOwner = await AsyncStorage.getItem("ownerPhone");
       const endpoint = isOwner ? "owner_requests" : "tenant_notifications";
-      
+
       const response = await fetchWithAuth(`${BASE_URL}/api/${endpoint}/${encodeURIComponent(userPhone)}/`);
       const data = await response.json();
       if (Array.isArray(data)) {
@@ -78,15 +103,23 @@ export const BookingProvider = ({ children }) => {
         try {
           const data = JSON.parse(e.data);
           console.log("WS Data Received:", data);
-          
+
           // Trigger a full refresh when any notification comes in
           setRefreshTrigger((prev) => prev + 1);
 
           // Show popup alert if message exists
-          if (data.content?.message || data.message) {
-            Alert.alert("New Notification", data.content?.message || data.message);
+          const msgText = data.content?.message || data.message;
+          const msgType = data.content?.type || data.type;
+
+          if (msgText) {
+            // Check if this is a real-time status update or join request
+            if (msgType === "status_update" || msgType === "incoming_request" || msgType === "ISSUE" || msgType === "PAYMENT" || msgType === "PAYMENT_VERIFIED") {
+              playSound();
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }
+            Alert.alert("New Notification \uD83D\uDD14", msgText);
           }
-          
+
         } catch (err) {
           console.log("WS Message Error:", err);
         }
@@ -125,29 +158,29 @@ export const BookingProvider = ({ children }) => {
   // Refined Pending Count
   const pendingCount = requests.filter((r) => {
     if (clearedIds.includes(r.id)) return false;
-    
+
     const isUnseen = !seenIds.includes(r.id);
     const status = (r.status || "").toLowerCase();
 
     // 1. Join Request Logic
     if (r.type === "join_request" || !r.type) {
-        const isOwnerTask = ["pending", "allotted"].includes(status);
-        const isTenantAlert = ["accepted", "rejected"].includes(status);
-        return isUnseen && (isOwnerTask || isTenantAlert);
+      const isOwnerTask = ["pending", "allotted"].includes(status);
+      const isTenantAlert = ["accepted", "rejected"].includes(status);
+      return isUnseen && (isOwnerTask || isTenantAlert);
     }
 
     // 2. Issue Logic
     if (r.type === "issue") {
-        // Owner sees new/unseen issues
-        // Tenant sees resolved issues
-        return isUnseen;
+      // Owner sees new/unseen issues
+      // Tenant sees resolved issues
+      return isUnseen;
     }
 
     // 3. Payment Logic
     if (r.type === "payment") {
-        // Owner sees pending payments
-        // Tenant sees successful/failed payments
-        return isUnseen;
+      // Owner sees pending payments
+      // Tenant sees successful/failed payments
+      return isUnseen;
     }
 
     return isUnseen;
@@ -172,4 +205,3 @@ export const BookingProvider = ({ children }) => {
     </BookingContext.Provider>
   );
 };
-

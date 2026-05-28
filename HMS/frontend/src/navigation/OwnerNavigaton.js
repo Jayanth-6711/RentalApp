@@ -16,8 +16,8 @@ import AccountSwitcherSheet from "../components/AccountSwitcherSheet";
 import { BookingContext } from "../context/BookingContext";
 import { useLanguage } from "../utils/LanguageContext";
 import BASE_URL, { fetchWithAuth, WS_BASE_URL } from "../config/Api";
-
 import COLORS from "../theme/colors";
+import { Audio } from "expo-av";
 
 const Tab = createBottomTabNavigator();
 
@@ -27,28 +27,34 @@ export default function OwnerNavigation({ route, navigation }) {
   const { requests } = useContext(BookingContext);
   const pendingCount = requests.filter((r) => r.status === "pending").length;
 
+  // --- Audio Player State ---
+  const [sound, setSound] = useState();
+
+  async function playSound() {
+    try {
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        require("../../assets/notification.wav")
+      );
+      setSound(newSound);
+      await newSound.playAsync();
+    } catch (error) {
+      console.log("Error playing sound:", error);
+    }
+  }
+
+  useEffect(() => {
+    return sound
+      ? () => {
+        sound.unloadAsync();
+      }
+      : undefined;
+  }, [sound]);
+
   // --- Account Switcher State ---
   const bottomSheetRef = useRef(null);
   const [loggedInAccounts, setLoggedInAccounts] = useState([]);
 
   const loadLoggedInAccounts = async () => {
-    try {
-      const activeOwnerPhone = await AsyncStorage.getItem('ownerPhone');
-      if (activeOwnerPhone) {
-        const response = await fetchWithAuth(`${BASE_URL}/api/owner_accounts/${encodeURIComponent(activeOwnerPhone)}/`);
-        if (response.ok) {
-          const resData = await response.json();
-          if (resData && resData.accounts) {
-            setLoggedInAccounts(resData.accounts);
-            await AsyncStorage.setItem('loggedInOwnerAccounts', JSON.stringify(resData.accounts));
-            return;
-          }
-        }
-      }
-    } catch (e) {
-      console.log('Load accounts backend error:', e);
-    }
-
     try {
       const raw = await AsyncStorage.getItem('loggedInOwnerAccounts');
       if (raw) {
@@ -72,12 +78,12 @@ export default function OwnerNavigation({ route, navigation }) {
 
   const handleSwitchAccount = async (account) => {
     try {
-      await AsyncStorage.setItem('ownerPhone', account.id);
+      await AsyncStorage.setItem('ownerPhone', account.phone);
       bottomSheetRef.current?.close();
       setTimeout(() => {
         navigation.reset({
           index: 0,
-          routes: [{ name: 'OwnerNavigation', params: { phone: account.id } }],
+          routes: [{ name: 'OwnerNavigation', params: { phone: account.phone } }],
         });
       }, 350);
     } catch (e) {
@@ -107,7 +113,7 @@ export default function OwnerNavigation({ route, navigation }) {
     })();
   }, []);
 
-  // Listen for suspension events
+  // Listen for suspension events and incoming requests
   useEffect(() => {
     if (!activePhone) return;
 
@@ -117,6 +123,7 @@ export default function OwnerNavigation({ route, navigation }) {
     ws.onmessage = async (e) => {
       try {
         const msg = JSON.parse(e.data);
+
         if (msg.type === "account_status" && msg.status === "suspend") {
           let reasonText = msg.message || "Your account has been suspended by admin.";
           try {
@@ -125,7 +132,7 @@ export default function OwnerNavigation({ route, navigation }) {
               const data = await res.json();
               if (data.reason) reasonText = data.reason;
             }
-          } catch (err) {}
+          } catch (err) { }
 
           Alert.alert(
             t("account_suspended") || "Account Suspended",
@@ -142,8 +149,38 @@ export default function OwnerNavigation({ route, navigation }) {
             ],
             { cancelable: false }
           );
+        } else if (msg.type === "incoming_request") {
+          // Play custom sound and vibrate
+          playSound();
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+          Alert.alert(
+            "New Booking Request! \uD83D\uDD14",
+            msg.message || "You have a new join request from a tenant.",
+            [{ text: "View Details", onPress: () => navigation.navigate("OwnerNavigation", { screen: "Home" }) }]
+          );
+        } else if (msg.type === "ISSUE") {
+          // Play custom sound and vibrate
+          playSound();
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+
+          Alert.alert(
+            "New Issue Raised! \u26A0\uFE0F",
+            msg.message || "A tenant has reported a new issue.",
+            [{ text: "View Details", onPress: () => navigation.navigate("OwnerNavigation", { screen: "Issues" }) }]
+          );
+        } else if (msg.type === "PAYMENT") {
+          // Play custom sound and vibrate
+          playSound();
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+          Alert.alert(
+            "New Payment \uD83D\uDCB0",
+            msg.message || "A tenant has made a payment.",
+            [{ text: "View Details", onPress: () => navigation.navigate("OwnerNavigation", { screen: "Payment" }) }]
+          );
         }
-      } catch (err) {}
+      } catch (err) { }
     };
 
     return () => {

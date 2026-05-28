@@ -2416,11 +2416,31 @@ def update_request_status(request):
         req = JoinRequest.objects.get(id=request_id)
         req.status = status_value
         req.save()
+       
+        # Broadcast to Tenant if accepted or rejected
+        if status_value in ['accepted', 'rejected', 'allotted']:
+            from asgiref.sync import async_to_sync
+            from channels.layers import get_channel_layer
+           
+            sanitized_phone = req.tenant.phone.replace("+", "").replace("@", "_").replace(".", "_")
+            message = f"Your request for {req.property_name} has been {status_value}."
+           
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f"user_notifications_{sanitized_phone}",
+                {
+                    "type": "send_notification",
+                    "content": {
+                        "type": "status_update",
+                        "message": message,
+                        "status": status_value
+                    }
+                }
+            )
+           
         return Response({"message": "Status updated"})
     except JoinRequest.DoesNotExist:
         return Response({"error": "Request not found"}, status=404)
- 
-
 
  
  
@@ -2764,7 +2784,7 @@ def create_issue(request):
  
         # Create Notification in DB
         notification = Notification.objects.create(
-            recipient_phone=owner.owner_id,
+            recipient_phone=owner.phone,
             title="New Issue Raised",
             message=f"{tenant.name} has raised a new issue: {issue.title}",
             type="ISSUE",
@@ -2774,7 +2794,7 @@ def create_issue(request):
         # Send WebSocket notification to owner
         try:
             channel_layer = get_channel_layer()
-            sanitized_phone = owner.owner_id if owner.owner_id else owner.phone.replace("+", "")
+            sanitized_phone = owner.phone.replace("@", "_").replace(".", "_")
            
             for group in [f"owner_status_{sanitized_phone}", f"user_notifications_{sanitized_phone}"]:
                 async_to_sync(channel_layer.group_send)(
@@ -2800,8 +2820,11 @@ def create_issue(request):
         return Response({"error": "Tenant not found"}, status=404)
     except Exception as e:
         print("Create Issue Error:", e)
-        return Response({"error": str(e)}, status=400) 
- 
+        return Response({"error": str(e)}, status=400)
+
+
+
+        
 @api_view(['GET'])
 @jwt_required()
 def tenant_issues(request, identifier):
@@ -2864,7 +2887,6 @@ def owner_issues(request, phone):
     return Response(data)
 
 
-    
 @api_view(['PATCH'])
 @jwt_required()
 def update_issue_status(request, issue_id):
@@ -2881,22 +2903,28 @@ def update_issue_status(request, issue_id):
     issue.status = status_value
     issue.save()
  
+    # Notify Tenant
+    try:
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+       
+        sanitized_phone = issue.tenant.phone.replace("+", "").replace("@", "_").replace(".", "_")
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"user_notifications_{sanitized_phone}",
+            {
+                "type": "send_notification",
+                "content": {
+                    "type": "ISSUE",
+                    "message": f"Owner has updated your issue '{issue.title}' to {status_value}."
+                }
+            }
+        )
+    except Exception as e:
+        print("WS Error Notify Tenant Issue Status:", e)
+ 
     return Response({"message": "Status updated"})
  
- 
-# @api_view(['PATCH'])
-# def update_issue_comment(request, issue_id):
-#     try:
-#         issue = Issue.objects.get(id=issue_id)
-#     except Issue.DoesNotExist:
-#         return Response({"error": "Issue not found"}, status=404)
- 
-#     comment = request.data.get("owner_comment")
- 
-#     issue.owner_comment = comment
-#     issue.save()
- 
-#     return Response({"message": "Comment updated"})
  
 @api_view(['PATCH'])
 @jwt_required()
@@ -2916,11 +2944,31 @@ def update_issue_comment(request, issue_id):
     issue.owner_comment = comment
     issue.save()
  
+    # Notify Tenant
+    try:
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+       
+        sanitized_phone = issue.tenant.phone.replace("+", "").replace("@", "_").replace(".", "_")
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"user_notifications_{sanitized_phone}",
+            {
+                "type": "send_notification",
+                "content": {
+                    "type": "ISSUE",
+                    "message": f"Owner commented on your issue '{issue.title}': {comment}"
+                }
+            }
+        )
+    except Exception as e:
+        print("WS Error Notify Tenant Issue Comment:", e)
+ 
     return Response({
         "message": "Comment updated successfully",
         "owner_comment": issue.owner_comment
-    }, status=200) 
-
+    }, status=200)
+ 
 @api_view(['GET'])
 @jwt_required()
 def test_create_issue(request):
@@ -2936,7 +2984,6 @@ def delete_issue(request, issue_id):
  
     issue.delete()
     return Response({"message": "Issue deleted successfully"}, status=200)
- 
  
 @api_view(['PATCH'])
 @jwt_required()
