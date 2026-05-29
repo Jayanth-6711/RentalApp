@@ -336,6 +336,12 @@ export default function TenantRegisterScreen({ navigation }) {
         barStyle="light-content"
         backgroundColor={NAVY}
       />
+      <TouchableOpacity
+        onPress={() => navigation.goBack()}
+        style={{ position: 'absolute', top: Platform.OS === 'ios' ? 50 : 20, left: 20, zIndex: 100 }}
+      >
+        <Ionicons name="arrow-back" size={28} color={NAVY} />
+      </TouchableOpacity>
 
       <View style={styles.container}>
 

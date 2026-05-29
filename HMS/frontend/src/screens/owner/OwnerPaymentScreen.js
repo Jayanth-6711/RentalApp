@@ -64,7 +64,7 @@ const COLORS = {
   glassBorder: 'rgba(255, 255, 255, 0.3)',
 };
 
-const OwnerPaymentScreen = () => {
+const OwnerPaymentScreen = ({ navigation }) => {
   const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -961,9 +961,13 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerTop}>
-              <View style={styles.headerLeft}>
-                <Text style={styles.headerTitle}>{t("Owner dashboard") || "Owner Dashboard"}</Text>
-                {upiId ? (
+              <View style={[styles.headerLeft, { flexDirection: 'row', alignItems: 'center' }]}>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 12, padding: 4 }}>
+                  <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
+                </TouchableOpacity>
+                <View>
+                  <Text style={styles.headerTitle}>{t("Owner dashboard") || "Owner Dashboard"}</Text>
+                  {upiId ? (
                   <View style={styles.activeUpiBadge}>
                     <MaterialCommunityIcons name="check-decagram" size={14} color={COLORS.successGreen} />
                     <Text style={styles.activeUpiText}>{upiId}</Text>
@@ -971,9 +975,10 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                 ) : (
                   <Text style={styles.headerSubtitle}>{t("Manage payments") || "Manage your property payments"}</Text>
                 )}
+                </View>
               </View>
-      <View style={styles.headerRightActions}>
-        <TouchableOpacity 
+              <View style={styles.headerRightActions}>
+                <TouchableOpacity 
           style={styles.setupPaymentBtn} 
           onPress={() => setShowUpiModal(true)}
         >

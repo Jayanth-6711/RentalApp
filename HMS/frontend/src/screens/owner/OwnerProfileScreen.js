@@ -769,7 +769,7 @@ export default function OwnerProfile({ navigation }) {
           <Text style={styles.sectionTitle}>{t("manage_accounts") || "Manage Accounts"}</Text>
           <TouchableOpacity
             style={[styles.expensesCard, { flexDirection: 'row', alignItems: 'center', padding: 16, marginTop: 10, shadowColor: '#7C3AED' }]}
-            onPress={() => navigation.navigate('OwnerLoginScreen')}
+            onPress={() => navigation.navigate('OwnerRegistrationScreen', { initialStep: 1, phone: editableOwner.phone, name: editableOwner.name })}
           >
             <View style={[styles.expenseIconBox, { backgroundColor: '#F5F3FF' }]}>
               <Ionicons name="person-add-outline" size={24} color="#7C3AED" />

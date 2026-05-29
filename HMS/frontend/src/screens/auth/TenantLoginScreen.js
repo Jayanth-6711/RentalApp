@@ -142,6 +142,12 @@ export default function TenantLoginScreen({ navigation }) {
   return (
     <>
       <StatusBar barStyle="dark-content" backgroundColor={WHITE} />
+      <TouchableOpacity
+        onPress={() => navigation.goBack()}
+        style={{ position: 'absolute', top: Platform.OS === 'ios' ? 50 : 20, left: 20, zIndex: 100 }}
+      >
+        <Ionicons name="arrow-back" size={28} color={NAVY} />
+      </TouchableOpacity>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.container}

@@ -284,12 +284,12 @@ export default function TenantProfile({ navigation }) {
           end={{ x: 1, y: 1 }}
           style={styles.header}
         >
-          {/* <View style={styles.headerTopRow}>
-            <View style={{ flex: 1 }} />
-            <TouchableOpacity style={styles.notifBtn} onPress={() => navigation.navigate('TenantNotification')}>
-              <Ionicons name="notifications-outline" size={24} color="#5B21B6" />
+          <View style={styles.headerTopRow}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.headerBtn, { alignSelf: 'flex-start' }]}>
+              <Ionicons name="arrow-back" size={24} color="#5B21B6" />
             </TouchableOpacity>
-          </View> */}
+            <View style={{ flex: 1 }} />
+          </View>
 
           <View style={styles.profileSection}>
             <TouchableOpacity

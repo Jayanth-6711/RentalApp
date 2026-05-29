@@ -382,9 +382,14 @@ const TenantNotificationScreen = () => {
       <StatusBar barStyle="dark-content" />
 
       <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>Notifications</Text>
-          <Text style={styles.headerSubtitle}>Stay updated on your booking status</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 12, padding: 4 }}>
+            <Ionicons name="arrow-back" size={24} color={COLORS.TEXT_PRIMARY} />
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.headerTitle}>Notifications</Text>
+            <Text style={styles.headerSubtitle}>Stay updated on your booking status</Text>
+          </View>
         </View>
         <View style={styles.headerActions}>
           {visibleRequests.length > 0 && (

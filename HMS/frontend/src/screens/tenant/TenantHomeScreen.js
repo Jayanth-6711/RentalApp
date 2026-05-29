@@ -211,7 +211,7 @@ export default function TenantHomeScreen({ route }) {
 
   const newNotifications = requests.filter(
     r =>
-      (r.status === "accepted" || r.status === "rejected") &&
+      (r.status?.toLowerCase() === "accepted" || r.status?.toLowerCase() === "rejected") &&
       !r.seen
   ).length;
 
@@ -431,7 +431,7 @@ export default function TenantHomeScreen({ route }) {
   // NEW: One-time Welcome Screen check for newly accepted tenants
   useEffect(() => {
     const checkWelcome = async () => {
-      const acceptedReq = requests.find(r => r.status === "accepted" && r.status !== "withdrawn");
+      const acceptedReq = requests.find(r => r.status?.toLowerCase() === "accepted" && r.status?.toLowerCase() !== "withdrawn");
       if (acceptedReq) {
         const welcomeSeen = await AsyncStorage.getItem("welcomeSeen");
         if (welcomeSeen !== "true") {
@@ -648,13 +648,13 @@ export default function TenantHomeScreen({ route }) {
       normalize(r.propertyName || r.property_name) === normalize(a.name) &&
       normalize(r.owner_phone) === normalize(a.ownerPhone)
     );
-    const isAcceptedA = latestA?.status === "accepted" || latestA?.status === "completed";
+    const isAcceptedA = latestA?.status?.toLowerCase() === "accepted" || latestA?.status?.toLowerCase() === "completed";
 
     const latestB = requests.find(r =>
       normalize(r.propertyName || r.property_name) === normalize(b.name) &&
       normalize(r.owner_phone) === normalize(b.ownerPhone)
     );
-    const isAcceptedB = latestB?.status === "accepted" || latestB?.status === "completed";
+    const isAcceptedB = latestB?.status?.toLowerCase() === "accepted" || latestB?.status?.toLowerCase() === "completed";
 
     if (isAcceptedA && !isAcceptedB) return -1;
     if (!isAcceptedA && isAcceptedB) return 1;
@@ -943,14 +943,14 @@ export default function TenantHomeScreen({ route }) {
                             homeStyles.statusBadge,
                             {
                               backgroundColor:
-                                latestReq.status === "accepted" ? "#2ecc71" :
-                                  latestReq.status === "completed" ? "#27ae60" :
-                                    latestReq.status === "rejected" ? "#e74c3c" :
-                                      latestReq.status === "withdrawn" ? "#95a5a6" : "#f39c12"
+                                latestReq.status?.toLowerCase() === "accepted" ? "#2ecc71" :
+                                  latestReq.status?.toLowerCase() === "completed" ? "#27ae60" :
+                                    latestReq.status?.toLowerCase() === "rejected" ? "#e74c3c" :
+                                      latestReq.status?.toLowerCase() === "withdrawn" ? "#95a5a6" : "#f39c12"
                             }
                           ]}>
                             <Text style={homeStyles.statusText}>
-                              {latestReq.status === "completed" ? "COMPLETED" : latestReq.status.toUpperCase()}
+                              {latestReq.status?.toLowerCase() === "completed" ? "COMPLETED" : latestReq.status.toUpperCase()}
                             </Text>
                           </View>
                         )}
@@ -1720,9 +1720,9 @@ export function PropertyDetailsScreen(props) {
             <Text style={styles.name}>
               {requestStatus === "accepted" ? `Welcome to ${property.name}` : property.name}
             </Text>
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusText}>
-                {property.isAvailable ? "Available" : "Full"}
+            <View style={[styles.statusBadge, requestStatus === "accepted" && { backgroundColor: "#2ecc71" }]}>
+              <Text style={[styles.statusText, requestStatus === "accepted" && { color: "#fff" }]}>
+                {requestStatus === "accepted" ? "Accepted" : (property.isAvailable ? "Available" : "Full")}
               </Text>
             </View>
           </View>

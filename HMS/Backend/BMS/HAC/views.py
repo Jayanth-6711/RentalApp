@@ -2782,7 +2782,7 @@ def create_issue(request):
  
         # Create Notification in DB
         notification = Notification.objects.create(
-            recipient_phone=owner.phone,
+            recipient_phone=owner.owner_id,
             title="New Issue Raised",
             message=f"{tenant.name} has raised a new issue: {issue.title}",
             type="ISSUE",
@@ -2843,7 +2843,7 @@ def tenant_issues(request, identifier):
 @jwt_required()
 def owner_issues(request, phone):
     try:
-        owner = Owners.objects.filter(Q(owner_id=phone) | Q(phone=phone)).order_by('-created_at').first()
+        owner = Owners.objects.filter(owner_id=phone).first()
         if not owner:
             raise Owners.DoesNotExist
     except Owners.DoesNotExist:
@@ -3439,10 +3439,10 @@ def get_owner_payments(request, phone):
     Fetch all payments and active tenants for an owner.
     """
     try:
-        owner = Owners.objects.filter(Q(owner_id=phone) | Q(phone=phone)).first()
+        owner = Owners.objects.filter(owner_id=phone).first()
         if owner:
             payments = list(Payment.objects.filter(
-                Q(owner_phone__iexact=owner.owner_id) | Q(owner_phone__iexact=owner.phone)
+                owner_phone__iexact=owner.owner_id
             ).order_by('-created_at'))
         else:
             payments = list(Payment.objects.filter(owner_phone__iexact=phone).order_by('-created_at'))
@@ -3964,10 +3964,10 @@ def get_notifications(request, phone):
     Get all notifications for a user (owner/tenant).
     """
     try:
-        owner = Owners.objects.filter(Q(owner_id=phone) | Q(phone=phone)).first()
+        owner = Owners.objects.filter(owner_id=phone).first()
         if owner:
             notifications = Notification.objects.filter(
-                Q(recipient_phone__iexact=owner.owner_id) | Q(recipient_phone__iexact=owner.phone)
+                recipient_phone__iexact=owner.owner_id
             ).order_by('-created_at')
         else:
             notifications = Notification.objects.filter(
@@ -4021,8 +4021,10 @@ def mark_all_notifications_read(request, phone):
     Mark all notifications for a user as read.
     """
     try:
+        owner = Owners.objects.filter(owner_id=phone).first()
+        target_phone = owner.owner_id if owner else phone
         notifications = Notification.objects.filter(
-            recipient_phone__iexact=phone,
+            recipient_phone__iexact=target_phone,
             is_read=False
         )
         notifications.update(is_read=True)

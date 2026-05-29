@@ -15,7 +15,9 @@ import OwnerProfileScreen from "../screens/owner/OwnerProfileScreen";
 import AccountSwitcherSheet from "../components/AccountSwitcherSheet";
 import { BookingContext } from "../context/BookingContext";
 import { useLanguage } from "../utils/LanguageContext";
-import BASE_URL, { fetchWithAuth, WS_BASE_URL } from "../config/Api";
+import BASE_URL, { fetchWithAuth } from "../config/Api";
+import BlinkingBadge from "../components/BlinkingBadge";
+import { WS_BASE_URL } from "../config/Api";
 import COLORS from "../theme/colors";
 import { Audio } from "expo-av";
 
@@ -54,6 +56,8 @@ export default function OwnerNavigation({ route, navigation }) {
   const bottomSheetRef = useRef(null);
   const [loggedInAccounts, setLoggedInAccounts] = useState([]);
   const [activePhone, setactivePhone] = useState('');
+  const [hasPendingIssues, setHasPendingIssues] = useState(false);
+  const [hasPendingPayments, setHasPendingPayments] = useState(false);
 
   const loadLoggedInAccounts = async () => {
     try {
@@ -108,7 +112,12 @@ export default function OwnerNavigation({ route, navigation }) {
   const handleAddAccount = () => {
     bottomSheetRef.current?.close();
     setTimeout(() => {
-      navigation.navigate('OwnerLoginScreen');
+      const currentAcc = loggedInAccounts.find(a => a.id === activePhone);
+      navigation.navigate('OwnerRegistrationScreen', { 
+        initialStep: 2, 
+        phone: currentAcc?.phone || "",
+        name: currentAcc?.name || ""
+      });
     }, 350);
   };
 
@@ -122,12 +131,38 @@ export default function OwnerNavigation({ route, navigation }) {
   useEffect(() => {
     if (!activePhone) return;
 
+    const checkPending = async () => {
+      try {
+        const issuesRes = await fetchWithAuth(`${BASE_URL}/api/owner-issues/${encodeURIComponent(activePhone)}/`);
+        if (issuesRes.ok) {
+          const issuesData = await issuesRes.json();
+          setHasPendingIssues(issuesData.some(issue => issue.status?.toLowerCase() === 'pending' || issue.status?.toLowerCase() === 'open'));
+        }
+
+        const paymentsRes = await fetchWithAuth(`${BASE_URL}/api/owner_payments/${encodeURIComponent(activePhone)}/`);
+        if (paymentsRes.ok) {
+          const paymentsData = await paymentsRes.json();
+          const payments = paymentsData.payments || (Array.isArray(paymentsData) ? paymentsData : []);
+          setHasPendingPayments(payments.some(pay => pay.status?.toLowerCase() === 'pending'));
+        }
+      } catch (err) {}
+    };
+
+    checkPending();
+    const interval = setInterval(checkPending, 10000); // 10s poll
+    
     const wsUrl = `${WS_BASE_URL}/ws/owner-status/${encodeURIComponent(activePhone)}/`;
     const ws = new WebSocket(wsUrl);
 
     ws.onmessage = async (e) => {
       try {
         const msg = JSON.parse(e.data);
+        if (msg.type === "new_issue" || msg.type === "issue_update") {
+          checkPending();
+        }
+        if (msg.type === "new_payment" || msg.type === "payment_update") {
+          checkPending();
+        }
 
         if (msg.type === "account_status" && msg.status === "suspend") {
           let reasonText = msg.message || "Your account has been suspended by admin.";
@@ -189,9 +224,11 @@ export default function OwnerNavigation({ route, navigation }) {
     };
 
     return () => {
+      clearInterval(interval);
       ws.close();
     };
   }, [activePhone, navigation, t]);
+  if (!activePhone) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -220,26 +257,40 @@ export default function OwnerNavigation({ route, navigation }) {
           },
           tabBarIcon: ({ color, size }) => {
             let iconName = "";
+            let showBadge = false;
+
             if (route.name === "Home") iconName = "home";
-            else if (route.name === "Payment") iconName = "card";
-            else if (route.name === "Issues") iconName = "alert-circle";
+            else if (route.name === "Issues") {
+              iconName = "construct";
+              showBadge = hasPendingIssues;
+            }
+            else if (route.name === "Payment") {
+              iconName = "card";
+              showBadge = hasPendingPayments;
+            }
             else if (route.name === "Profile") iconName = "person";
 
-            return <Ionicons name={iconName} size={size} color={color} />;
+            return (
+              <View>
+                <Ionicons name={iconName} size={size} color={color} />
+                <BlinkingBadge visible={showBadge} />
+              </View>
+            );
           },
         })}
       >
         <Tab.Screen
           name="Home"
           component={OwnerHomeScreen}
-          initialParams={{ phone: route.params?.phone }}
+          initialParams={{ phone: activePhone }}
           options={{ tabBarLabel: t('dashboard') }}
         />
-        <Tab.Screen name="Issues" component={OwnerIssuesScreen} options={{ tabBarLabel: t('issues') }} />
-        <Tab.Screen name="Payment" component={OwnerPaymentScreen} options={{ tabBarLabel: t('payments') }} />
+        <Tab.Screen name="Issues" component={OwnerIssuesScreen} initialParams={{ phone: activePhone }} options={{ tabBarLabel: t('issues') }} />
+        <Tab.Screen name="Payment" component={OwnerPaymentScreen} initialParams={{ phone: activePhone }} options={{ tabBarLabel: t('payments') }} />
         <Tab.Screen
           name="Profile"
           component={OwnerProfileScreen}
+          initialParams={{ phone: activePhone }}
           options={{
             tabBarLabel: t('Account'),
             tabBarButton: (props) => (

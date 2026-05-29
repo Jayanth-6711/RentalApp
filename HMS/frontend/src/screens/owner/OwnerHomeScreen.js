@@ -1520,14 +1520,7 @@ export default function BuildingScreen({ route }) {
                               let bedsLabel = stayType === "hostel" ? `${count}/${unit.beds} Beds` : stayType === "apartment" ? `${unit.type}` : `${unit.area} sq.ft`;
 
                               if (isOccupiedRoom) {
-                                const isDue = parseInt(unit.label) % 3 === 0;
-                                if (isDue) {
-                                  badgeBg = "rgba(245, 158, 11, 0.1)";
-                                  badgeTextCol = "#F59E0B";
-                                  statusText = "Due";
-                                  dotCol = "#EF4444";
-                                  paymentLabel = "Due 5 days";
-                                } else if (stayType === "hostel" && count < totalBeds) {
+                                if (stayType === "hostel" && count < totalBeds) {
                                   // Partial Occupancy
                                   badgeBg = "rgba(245, 158, 11, 0.15)";
                                   badgeTextCol = "#D97706";
@@ -1537,7 +1530,7 @@ export default function BuildingScreen({ route }) {
                                 } else {
                                   badgeBg = "rgba(34, 197, 94, 0.1)";
                                   badgeTextCol = "#22C55E";
-                                  statusText = "Occupied";
+                                  statusText = (stayType !== "hostel" && roomTenants.length > 0) ? roomTenants[0].name.substring(0,10) : "Occupied";
                                   dotCol = "#22C55E";
                                   paymentLabel = "Paid";
                                 }

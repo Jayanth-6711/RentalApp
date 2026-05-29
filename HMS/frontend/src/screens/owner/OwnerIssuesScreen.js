@@ -308,6 +308,9 @@ export default function OwnerIssues() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerLeftContainer}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={COLORS.TEXT_PRIMARY} />
+          </TouchableOpacity>
           <View>
             <Text style={styles.headerTitle}>{t("issues")}</Text>
             <Text style={styles.headerSubtitle}>{t("manage_requests")}</Text>

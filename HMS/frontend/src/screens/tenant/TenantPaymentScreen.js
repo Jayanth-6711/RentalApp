@@ -65,7 +65,7 @@ import { useLanguage } from '../../utils/LanguageContext';
 
 const { width } = Dimensions.get('window');
 
-const TenantPaymentScreen = () => {
+const TenantPaymentScreen = ({ navigation }) => {
   const { t } = useLanguage();
 
   const upiProviders = [
@@ -527,7 +527,10 @@ const TenantPaymentScreen = () => {
             style={styles.mainCard}
           >
             <View style={styles.cardHeader}>
-              <View style={styles.propertyBadge}>
+              <View style={[styles.propertyBadge, { flexDirection: 'row', alignItems: 'center' }]}>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 8 }}>
+                  <Ionicons name="arrow-back" size={18} color="#FFF" />
+                </TouchableOpacity>
                 <Ionicons name="business" size={14} color="#FFF" />
                 <Text style={styles.propertyBadgeText}>{paymentData?.propertyName || 'Property'}</Text>
               </View>

@@ -19,6 +19,10 @@ import ProfileScreen from "../screens/tenant/TenantProfileScreen";
 import { BookingContext } from "../context/BookingContext";
 import COLORS from "../theme/colors";
 import { useLanguage } from "../utils/LanguageContext";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import BASE_URL, { fetchWithAuth } from "../config/Api";
+import BlinkingBadge from "../components/BlinkingBadge";
+import { View } from "react-native";
  
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -36,20 +40,55 @@ function HomeStack() {
 }
  
 // Wrapper components to decide which screen to show
-function IssuesWrapper() {
+function IssuesWrapper({ navigation }) {
   const { requests = [] } = useContext(BookingContext);
   const isApproved = requests.some((r) => r.status === "accepted");
-  return isApproved ? <TenantIssuesScreen /> : <IssuesScreen1 />;
+  return isApproved ? <TenantIssuesScreen navigation={navigation} /> : <IssuesScreen1 navigation={navigation} />;
 }
  
-function PaymentWrapper() {
+function PaymentWrapper({ navigation }) {
   const { requests = [] } = useContext(BookingContext);
   const isApproved = requests.some((r) => r.status === "accepted");
-  return isApproved ? <TenantPaymentScreen /> : <PaymentScreen />;
+  return isApproved ? <TenantPaymentScreen navigation={navigation} /> : <PaymentScreen navigation={navigation} />;
 }
  
 export default function TenantNavigation() {
   const { t } = useLanguage();
+  const [activePhone, setActivePhone] = React.useState('');
+  const [hasPendingIssues, setHasPendingIssues] = React.useState(false);
+  const [hasPendingPayments, setHasPendingPayments] = React.useState(false);
+
+  React.useEffect(() => {
+    AsyncStorage.getItem('tenantPhone').then(phone => {
+      if (phone) setActivePhone(phone);
+    });
+  }, []);
+
+  React.useEffect(() => {
+    if (!activePhone) return;
+
+    const checkPending = async () => {
+      try {
+        const issuesRes = await fetchWithAuth(`${BASE_URL}/api/tenant-issues/${encodeURIComponent(activePhone)}/`);
+        if (issuesRes.ok) {
+          const issuesData = await issuesRes.json();
+          setHasPendingIssues(issuesData.some(issue => issue.status?.toLowerCase() === 'pending' || issue.status?.toLowerCase() === 'open'));
+        }
+
+        const paymentsRes = await fetchWithAuth(`${BASE_URL}/api/payment-details/${encodeURIComponent(activePhone)}/`);
+        if (paymentsRes.ok) {
+          const paymentsData = await paymentsRes.json();
+          const payments = paymentsData.payments || (Array.isArray(paymentsData) ? paymentsData : []);
+          setHasPendingPayments(payments.some(pay => pay.status?.toLowerCase() === 'pending'));
+        }
+      } catch (err) {}
+    };
+
+    checkPending();
+    const interval = setInterval(checkPending, 10000);
+    return () => clearInterval(interval);
+  }, [activePhone]);
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -58,11 +97,25 @@ export default function TenantNavigation() {
         tabBarInactiveTintColor: "gray",
         tabBarIcon: ({ color, size }) => {
           let iconName = "";
+          let showBadge = false;
+
           if (route.name === "Home") iconName = "home";
-          else if (route.name === "Issues") iconName = "alert-circle";
-          else if (route.name === "Payment") iconName = "card";
+          else if (route.name === "Issues") {
+            iconName = "alert-circle";
+            showBadge = hasPendingIssues;
+          }
+          else if (route.name === "Payment") {
+            iconName = "card";
+            showBadge = hasPendingPayments;
+          }
           else if (route.name === "Profile") iconName = "person";
-          return <Ionicons name={iconName} size={size} color={color} />;
+
+          return (
+            <View>
+              <Ionicons name={iconName} size={size} color={color} />
+              <BlinkingBadge visible={showBadge} />
+            </View>
+          );
         },
       })}
     >
