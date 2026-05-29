@@ -758,7 +758,13 @@ export default function BuildingScreen({ route }) {
       setContactNumber("");
       settenantPhone("");
       setMonthlyRent("");
-      setCheckIn("");
+      
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      setCheckIn(`${yyyy}-${mm}-${dd}`);
+
       setCheckOut("");
       setIdProofUri("");
     }
@@ -777,12 +783,14 @@ export default function BuildingScreen({ route }) {
   const isValidEmail = (mail) =>
     mail.trim().length === 0 || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail.trim());
   const isFormValid = () => {
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     return (
       isValidName(tenantName) &&
       isValidPhone(contactNumber) &&
       monthlyRent.trim().length > 0 &&
-      bedNumber >= 1 &&
-      bedNumber <= 4
+      (stayType !== "hostel" || (bedNumber >= 1 && bedNumber <= 4)) &&
+      dateRegex.test(checkIn.trim()) &&
+      (checkOut.trim().length === 0 || dateRegex.test(checkOut.trim()))
     );
   };
   const addTenant = () => {
@@ -981,7 +989,9 @@ export default function BuildingScreen({ route }) {
 
       formData.append("name", tenantName);
       formData.append("phone", contactNumber);
-      formData.append("bed", bedNumber);
+      if (stayType === "hostel") {
+        formData.append("bed", bedNumber);
+      }
       formData.append("rent", monthlyRent);
       if (checkIn) formData.append("checkIn", checkIn);
       if (checkOut) formData.append("checkOut", checkOut);
@@ -999,15 +1009,15 @@ export default function BuildingScreen({ route }) {
         formData.append("roomno", parseInt(selectedRoom));
       }
       else if (stayType === "apartment") {
-        formData.append("flatno", selectedRoom);
+        formData.append("flatno", parseInt(selectedRoom) || selectedRoom);
       }
 
       else if (stayType === "commercial") {
-        formData.append("sectionNo", selectedRoom); // ✅ correct
+        formData.append("sectionNo", parseInt(selectedRoom) || selectedRoom); // ✅ correct
       }
 
 
-      formData.append("owner_phone", ownerPhone);
+      formData.append("owner_phone", ownerPhone || phone);
 
       if (idProofUri) {
         formData.append("idUri", {
@@ -1040,7 +1050,23 @@ export default function BuildingScreen({ route }) {
       });
 
       const data = await response.json();
-      console.log("Tenant saved:", data);
+      console.log("Tenant saved response:", data);
+
+      if (!response.ok) {
+        console.log("Error details from backend:", data);
+        let errorMsg = "Please check your inputs and try again.";
+        if (data) {
+          if (typeof data === "object") {
+            errorMsg = Object.entries(data)
+              .map(([key, val]) => `${key}: ${Array.isArray(val) ? val.join(", ") : val}`)
+              .join("\n");
+          } else {
+            errorMsg = String(data);
+          }
+        }
+        Alert.alert("Failed to Add Tenant", errorMsg);
+        return;
+      }
 
       if (pendingAllotment?.requestId) {
         try {
@@ -1066,6 +1092,7 @@ export default function BuildingScreen({ route }) {
       }
     } catch (error) {
       console.log("Error saving tenant:", error);
+      Alert.alert("Error Saving Tenant", error.message || "An unexpected error occurred.");
     }
   };
 
@@ -1546,64 +1573,74 @@ export default function BuildingScreen({ route }) {
                                   {/* Middle Row: Beds count only */}
                                   <Text style={styles.bedsLabelText}>{bedsLabel}</Text>
 
-                                  {/* Bottom Row: Action buttons only — name shows in modal on tap */}
-                                  <View style={[styles.roomCardBottom, { justifyContent: editMode && stayType === "hostel" ? "space-between" : "flex-end" }]}>
-                                    {editMode ? (
-                                      <>
-                                        {stayType === "hostel" && (
-                                            <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#F3F4F6", borderRadius: 12, paddingHorizontal: 4, paddingVertical: 2, flex: 1, marginRight: 8, justifyContent: "space-between" }}>
-                                              <TouchableOpacity
-                                                onPress={(e) => { e.stopPropagation(); updateUnit(item.floorNo || parseInt(item.floor.replace("Floor ", "")), unit.roomNo || unit.flatNo || unit.sectionNo, 'decrement_beds'); }}
-                                                style={{ padding: 6 }}
-                                              >
-                                                <Ionicons name="remove" size={18} color="#4B5563" />
-                                              </TouchableOpacity>
-                                              <Text style={{ marginHorizontal: 6, fontWeight: "700", color: "#111827", fontSize: 14 }}>{unit.beds}</Text>
-                                              <TouchableOpacity
-                                                onPress={(e) => { e.stopPropagation(); updateUnit(item.floorNo || parseInt(item.floor.replace("Floor ", "")), unit.roomNo || unit.flatNo || unit.sectionNo, 'increment_beds'); }}
-                                                style={{ padding: 6 }}
-                                              >
-                                                <Ionicons name="add" size={18} color="#4B5563" />
-                                              </TouchableOpacity>
-                                            </View>
-                                        )}
-                                        <TouchableOpacity
-                                          onPress={(e) => {
-                                            e.stopPropagation();
-                                            const unitId = unit.roomNo || unit.flatNo || unit.sectionNo;
-                                            const unitType = stayType === 'hostel' ? 'Room' : stayType === 'apartment' ? 'Flat' : 'Section';
-                                            Alert.alert(
-                                              `Delete ${unitType}`,
-                                              `Are you sure you want to delete ${unitType} ${unit.label}?`,
-                                              [
-                                                { text: 'Cancel', style: 'cancel' },
-                                                { text: 'Delete', style: 'destructive', onPress: () => updateUnit(item.floorNo || parseInt(item.floor.replace("Floor ", "")), unitId, 'delete_unit') }
-                                              ]
-                                            );
-                                          }}
-                                          style={[styles.cardAddBtn, { backgroundColor: "#FEE2E2", width: 28, height: 28, borderRadius: 14 }]}
-                                          activeOpacity={0.7}
-                                        >
-                                          <Ionicons name="trash" size={16} color="#EF4444" />
-                                        </TouchableOpacity>
-                                      </>
-                                    ) : isOccupiedRoom && emptyBedsCount === 0 ? (
-                                      <View style={[styles.actionDotsBtn, { backgroundColor: "rgba(34, 197, 94, 0.1)" }]}>
-                                        <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
-                                      </View>
-                                    ) : (
+                                  {/* Action Buttons / Edit Controls */}
+                                  {editMode ? (
+                                    <View style={{ width: "100%", marginTop: 8 }}>
+                                      {stayType === "hostel" && (
+                                        <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#F3F4F6", borderRadius: 10, paddingHorizontal: 4, paddingVertical: 2, justifyContent: "space-between", marginBottom: 6 }}>
+                                          <TouchableOpacity
+                                            onPress={(e) => { e.stopPropagation(); updateUnit(item.floorNo || parseInt(item.floor.replace("Floor ", "")), unit.roomNo || unit.flatNo || unit.sectionNo, 'decrement_beds'); }}
+                                            style={{ padding: 6 }}
+                                          >
+                                            <Ionicons name="remove-circle-outline" size={18} color="#4B5563" />
+                                          </TouchableOpacity>
+                                          <Text style={{ fontWeight: "700", color: "#111827", fontSize: 13 }}>{unit.beds} Beds</Text>
+                                          <TouchableOpacity
+                                            onPress={(e) => { e.stopPropagation(); updateUnit(item.floorNo || parseInt(item.floor.replace("Floor ", "")), unit.roomNo || unit.flatNo || unit.sectionNo, 'increment_beds'); }}
+                                            style={{ padding: 6 }}
+                                          >
+                                            <Ionicons name="add-circle-outline" size={18} color="#4B5563" />
+                                          </TouchableOpacity>
+                                        </View>
+                                      )}
                                       <TouchableOpacity
                                         onPress={(e) => {
                                           e.stopPropagation();
-                                          openTenantModal(item.floor, unit.label);
+                                          const unitId = unit.roomNo || unit.flatNo || unit.sectionNo;
+                                          const unitType = stayType === 'hostel' ? 'Room' : stayType === 'apartment' ? 'Flat' : 'Section';
+                                          Alert.alert(
+                                            `Delete ${unitType}`,
+                                            `Are you sure you want to delete ${unitType} ${unit.label}?`,
+                                            [
+                                              { text: 'Cancel', style: 'cancel' },
+                                              { text: 'Delete', style: 'destructive', onPress: () => updateUnit(item.floorNo || parseInt(item.floor.replace("Floor ", "")), unitId, 'delete_unit') }
+                                            ]
+                                          );
                                         }}
-                                        style={styles.cardAddBtn}
+                                        style={{
+                                          flexDirection: "row",
+                                          alignItems: "center",
+                                          justifyContent: "center",
+                                          backgroundColor: "#FEE2E2",
+                                          borderRadius: 8,
+                                          paddingVertical: 6,
+                                        }}
                                         activeOpacity={0.7}
                                       >
-                                        <Ionicons name="add" size={16} color="#6C2BD9" />
+                                        <Ionicons name="trash" size={14} color="#EF4444" style={{ marginRight: 4 }} />
+                                        <Text style={{ color: "#EF4444", fontSize: 12, fontWeight: "600" }}>Delete</Text>
                                       </TouchableOpacity>
-                                    )}
-                                  </View>
+                                    </View>
+                                  ) : (
+                                    <View style={[styles.roomCardBottom, { justifyContent: "flex-end" }]}>
+                                      {isOccupiedRoom && emptyBedsCount === 0 ? (
+                                        <View style={[styles.actionDotsBtn, { backgroundColor: "rgba(34, 197, 94, 0.1)" }]}>
+                                          <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
+                                        </View>
+                                      ) : (
+                                        <TouchableOpacity
+                                          onPress={(e) => {
+                                            e.stopPropagation();
+                                            openTenantModal(item.floor, unit.label);
+                                          }}
+                                          style={styles.cardAddBtn}
+                                          activeOpacity={0.7}
+                                        >
+                                          <Ionicons name="add" size={16} color="#6C2BD9" />
+                                        </TouchableOpacity>
+                                      )}
+                                    </View>
+                                  )}
                                 </TouchableOpacity>
                               );
                             })}
