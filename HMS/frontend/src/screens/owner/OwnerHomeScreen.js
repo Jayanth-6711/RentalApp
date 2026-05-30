@@ -758,7 +758,7 @@ export default function BuildingScreen({ route }) {
       setContactNumber("");
       settenantPhone("");
       setMonthlyRent("");
-      
+
       const today = new Date();
       const yyyy = today.getFullYear();
       const mm = String(today.getMonth() + 1).padStart(2, '0');
@@ -1017,7 +1017,7 @@ export default function BuildingScreen({ route }) {
       }
 
 
-      formData.append("owner_phone", ownerPhone || phone);
+      formData.append("owner_phone", phone);
 
       if (idProofUri) {
         formData.append("idUri", {
@@ -1530,7 +1530,7 @@ export default function BuildingScreen({ route }) {
                                 } else {
                                   badgeBg = "rgba(34, 197, 94, 0.1)";
                                   badgeTextCol = "#22C55E";
-                                  statusText = (stayType !== "hostel" && roomTenants.length > 0) ? roomTenants[0].name.substring(0,10) : "Occupied";
+                                  statusText = (stayType !== "hostel" && roomTenants.length > 0) ? roomTenants[0].name.substring(0, 10) : "Occupied";
                                   dotCol = "#22C55E";
                                   paymentLabel = "Paid";
                                 }

@@ -128,7 +128,7 @@ export default function OwnerLoginScreen({ navigation }) {
             Alert.alert("Welcome", "Login Successful");
 
             if (userData.token) await AsyncStorage.setItem("userToken", userData.token);
-            await AsyncStorage.setItem("ownerPhone", userData.user.phone);
+            await AsyncStorage.setItem("ownerPhone", userData.user.id);
 
             const raw = await AsyncStorage.getItem("loggedInOwnerAccounts");
             let accounts = raw ? JSON.parse(raw) : [];
@@ -139,7 +139,7 @@ export default function OwnerLoginScreen({ navigation }) {
 
             navigation.reset({
               index: 0,
-              routes: [{ name: "OwnerNavigation", params: { phone: userData.user.phone } }],
+              routes: [{ name: "OwnerNavigation", params: { phone: userData.user.id } }],
             });
 
           } else {
@@ -194,7 +194,13 @@ export default function OwnerLoginScreen({ navigation }) {
         backgroundColor={NAVY}
       />
       <TouchableOpacity
-        onPress={() => navigation.goBack()}
+        onPress={() => {
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+          } else {
+            navigation.navigate("RoleSection");
+          }
+        }}
         style={{ position: 'absolute', top: Platform.OS === 'ios' ? 50 : 20, left: 20, zIndex: 100 }}
       >
         <Ionicons name="arrow-back" size={28} color={NAVY} />

@@ -54,6 +54,7 @@ export default function TenantProfile({ navigation }) {
   const [tenantData, setTenantData] = useState(initialTenant);
   const [profileImage, setProfileImage] = useState(null);
 
+
   // --- AI Assistant Draggable State & Chat ---
   const [showAiModal, setShowAiModal] = useState(false);
   const [aiMessages, setAiMessages] = useState([
@@ -108,7 +109,6 @@ export default function TenantProfile({ navigation }) {
         const tenantInfo = {
           name: data.name || "Tenant",
           phone: data.phone || "N/A",
-          phone: data.phone || "N/A",
 
           apartment: data.property_name || "N/A",
 
@@ -135,6 +135,9 @@ export default function TenantProfile({ navigation }) {
           setProfileImage(null);
         }
       }
+
+
+
     } catch (e) {
       console.log("ERROR:", e);
     } finally {
@@ -339,6 +342,8 @@ export default function TenantProfile({ navigation }) {
             <InfoItem icon="location-outline" label={t("location") || "Location"} value={tenantData.location} color="#EC4899" />
           </View>
         </View>
+
+
 
         {/* Quick Actions */}
         <View style={styles.section}>
@@ -1005,7 +1010,8 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-  }
+  },
+
 });
 
 

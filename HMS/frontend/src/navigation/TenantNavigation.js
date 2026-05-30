@@ -38,20 +38,16 @@ function HomeStack() {
     </Stack.Navigator>
   );
 }
- 
-// Wrapper components to decide which screen to show
 function IssuesWrapper({ navigation }) {
-  const { requests = [] } = useContext(BookingContext);
-  const isApproved = requests.some((r) => r.status === "accepted");
-  return isApproved ? <TenantIssuesScreen navigation={navigation} /> : <IssuesScreen1 navigation={navigation} />;
+  const { isJoined } = useContext(BookingContext);
+  return isJoined ? <TenantIssuesScreen navigation={navigation} /> : <IssuesScreen1 navigation={navigation} />;
 }
- 
+
 function PaymentWrapper({ navigation }) {
-  const { requests = [] } = useContext(BookingContext);
-  const isApproved = requests.some((r) => r.status === "accepted");
-  return isApproved ? <TenantPaymentScreen navigation={navigation} /> : <PaymentScreen navigation={navigation} />;
+  const { isJoined } = useContext(BookingContext);
+  return isJoined ? <TenantPaymentScreen navigation={navigation} /> : <PaymentScreen navigation={navigation} />;
 }
- 
+
 export default function TenantNavigation() {
   const { t } = useLanguage();
   const [activePhone, setActivePhone] = React.useState('');
@@ -120,8 +116,16 @@ export default function TenantNavigation() {
       })}
     >
       <Tab.Screen name="Home" component={HomeStack} options={{ tabBarLabel: t('home') }} />
-      <Tab.Screen name="Issues" component={IssuesWrapper} options={{ tabBarLabel: t('issues') }} />
-      <Tab.Screen name="Payment" component={PaymentWrapper} options={{ tabBarLabel: t('payments') }} />
+      <Tab.Screen
+        name="Issues"
+        component={IssuesWrapper}
+        options={{ tabBarLabel: t("issues") }}
+      />
+      <Tab.Screen
+        name="Payment"
+        component={PaymentWrapper}
+        options={{ tabBarLabel: t("payments") }}
+      />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: t('edit_profile') }} />
     </Tab.Navigator>
   );

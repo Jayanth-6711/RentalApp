@@ -837,10 +837,20 @@ def get_properties_listing(request):
 @jwt_required()
 def registerbeds(request):
     print(" Incoming Data:", request.data)
-    serializer = TenantBedSerializer(data=request.data)
+    data = request.data.copy()
+    owner_phone = data.get('owner_phone')
+    if owner_phone:
+        owner = Owners.objects.filter(Q(owner_id=owner_phone) | Q(phone=owner_phone)).order_by('-created_at').first()
+        if owner:
+            data['owner_phone'] = owner.owner_id
+    serializer = TenantBedSerializer(data=data)
 
     if serializer.is_valid():
-        serializer.save()
+        tenant_bed = serializer.save()
+        t_obj = Tenent.objects.filter(phone=tenant_bed.phone).first()
+        if t_obj:
+            t_obj.is_vacant = False
+            t_obj.save()
         return Response({
             "message": "Tenant Added Successfully",
             "data": serializer.data
@@ -852,10 +862,20 @@ def registerbeds(request):
 @jwt_required()
 def registerapartmentbeds(request):
     print(" Incoming Data:", request.data)
-    serializer = ApartmentBedSerializer(data=request.data)
+    data = request.data.copy()
+    owner_phone = data.get('owner_phone')
+    if owner_phone:
+        owner = Owners.objects.filter(Q(owner_id=owner_phone) | Q(phone=owner_phone)).order_by('-created_at').first()
+        if owner:
+            data['owner_phone'] = owner.owner_id
+    serializer = ApartmentBedSerializer(data=data)
 
     if serializer.is_valid():
-        serializer.save()
+        tenant_bed = serializer.save()
+        t_obj = Tenent.objects.filter(phone=tenant_bed.phone).first()
+        if t_obj:
+            t_obj.is_vacant = False
+            t_obj.save()
         return Response({
             "message": "Tenant Added Successfully",
             "data": serializer.data
@@ -867,10 +887,20 @@ def registerapartmentbeds(request):
 @jwt_required()
 def registercommercialbeds(request):
     print(" Incoming Data:", request.data)
-    serializer = CommercialBedSerializer(data=request.data)
+    data = request.data.copy()
+    owner_phone = data.get('owner_phone')
+    if owner_phone:
+        owner = Owners.objects.filter(Q(owner_id=owner_phone) | Q(phone=owner_phone)).order_by('-created_at').first()
+        if owner:
+            data['owner_phone'] = owner.owner_id
+    serializer = CommercialBedSerializer(data=data)
 
     if serializer.is_valid():
-        serializer.save()
+        tenant_bed = serializer.save()
+        t_obj = Tenent.objects.filter(phone=tenant_bed.phone).first()
+        if t_obj:
+            t_obj.is_vacant = False
+            t_obj.save()
         print("✅ Saved data:", serializer.data)
         return Response({
             "message": "Tenant Added Successfully",
@@ -884,7 +914,9 @@ def registercommercialbeds(request):
 @api_view(['GET'])
 @jwt_required()
 def get_tenantsbeds(request, phone):
-    tenants = TenantBeds.objects.filter(owner_phone=phone)
+    owner = Owners.objects.filter(Q(owner_id=phone) | Q(phone=phone)).first()
+    owner_id = owner.owner_id if owner else phone
+    tenants = TenantBeds.objects.filter(owner_phone=owner_id)
     serializer = TenantBedSerializer(tenants, many=True, context={'request': request})
 
     return Response({
@@ -895,7 +927,9 @@ def get_tenantsbeds(request, phone):
 @api_view(['GET'])
 @jwt_required()
 def get_apartmentbeds(request, phone):
-    tenants = ApartmentTenantBeds.objects.filter(owner_phone=phone)
+    owner = Owners.objects.filter(Q(owner_id=phone) | Q(phone=phone)).first()
+    owner_id = owner.owner_id if owner else phone
+    tenants = ApartmentTenantBeds.objects.filter(owner_phone=owner_id)
     serializer = ApartmentBedSerializer(tenants, many=True, context={'request': request})
     return Response({
         "message": "Tenants fetched successfully",
@@ -905,7 +939,9 @@ def get_apartmentbeds(request, phone):
 @api_view(['GET'])
 @jwt_required()
 def get_commercialbeds(request, phone):
-    tenants = CommercialTenantBeds.objects.filter(owner_phone=phone)
+    owner = Owners.objects.filter(Q(owner_id=phone) | Q(phone=phone)).first()
+    owner_id = owner.owner_id if owner else phone
+    tenants = CommercialTenantBeds.objects.filter(owner_phone=owner_id)
     serializer = CommercialBedSerializer(tenants, many=True, context={'request': request})
     return Response({
         "message": "Tenants fetched successfully",
@@ -965,6 +1001,13 @@ def delete_hostel_tenant(request, id):
             status=404
         )
 
+    # Reset tenant vacancy status
+    t_obj = Tenent.objects.filter(phone=tenant.phone).first()
+    if t_obj:
+        t_obj.is_vacant = True
+        t_obj.owner = None
+        t_obj.save()
+
     tenant.delete()
 
     return Response({
@@ -983,6 +1026,13 @@ def delete_apartment_tenant(request, id):
             status=404
         )
 
+    # Reset tenant vacancy status
+    t_obj = Tenent.objects.filter(phone=tenant.phone).first()
+    if t_obj:
+        t_obj.is_vacant = True
+        t_obj.owner = None
+        t_obj.save()
+
     tenant.delete()
 
     return Response({
@@ -1000,6 +1050,13 @@ def delete_commercial_tenant(request, id):
             {"error": "Tenant not found"},
             status=404
         )
+
+    # Reset tenant vacancy status
+    t_obj = Tenent.objects.filter(phone=tenant.phone).first()
+    if t_obj:
+        t_obj.is_vacant = True
+        t_obj.owner = None
+        t_obj.save()
 
     tenant.delete()
 
@@ -1363,74 +1420,138 @@ def tenantdetails(request, phone):
         property_type = "N/A"
         location = "N/A"
  
-        if tenant.owner:
- 
-            # HOSTEL
-            hostel = StayHostelDetails.objects.filter(
-                owner=tenant.owner
-            ).first()
- 
-            if hostel:
-                property_name = hostel.hostelName
-                property_type = hostel.stayType
-                location = hostel.location
- 
-            else:
-                # APARTMENT
-                apartment = ApartmentStayDetails.objects.filter(
+        if tenant.owner and not tenant.is_vacant:
+            # Try to get active property from completed JoinRequest first
+            jr = JoinRequest.objects.filter(tenant=tenant, status='completed').order_by('-created_at').first()
+            
+            # Find the specific property based on JoinRequest property name
+            property_found = False
+            if jr and jr.property_name:
+                # Search Hostel
+                hostel = StayHostelDetails.objects.filter(owner=tenant.owner, hostelName__iexact=jr.property_name.strip()).first()
+                if hostel:
+                    property_name = hostel.hostelName
+                    property_type = hostel.stayType
+                    location = hostel.location
+                    property_found = True
+                else:
+                    # Search Apartment
+                    apt = ApartmentStayDetails.objects.filter(owner=tenant.owner, apartmentName__iexact=jr.property_name.strip()).first()
+                    if apt:
+                        property_name = apt.apartmentName
+                        property_type = apt.stayType
+                        location = apt.location
+                        property_found = True
+                    else:
+                        # Search Commercial
+                        comm = CommericialDetails.objects.filter(owner=tenant.owner, commercialName__iexact=jr.property_name.strip()).first()
+                        if comm:
+                            property_name = comm.commercialName
+                            property_type = comm.stayType
+                            location = comm.location
+                            property_found = True
+
+            if not property_found:
+                # Fallback to owner's first property if no matching completed JoinRequest found
+                hostel = StayHostelDetails.objects.filter(
                     owner=tenant.owner
                 ).first()
- 
-                if apartment:
-                    property_name = apartment.apartmentName
-                    property_type = apartment.stayType
-                    location = apartment.location
- 
+      
+                if hostel:
+                    property_name = hostel.hostelName
+                    property_type = hostel.stayType
+                    location = hostel.location
+      
                 else:
-                    # COMMERCIAL
-                    commercial = CommericialDetails.objects.filter(
+                    # APARTMENT
+                    apartment = ApartmentStayDetails.objects.filter(
                         owner=tenant.owner
                     ).first()
+      
+                    if apartment:
+                        property_name = apartment.apartmentName
+                        property_type = apartment.stayType
+                        location = apartment.location
+      
+                    else:
+                        # COMMERCIAL
+                        commercial = CommericialDetails.objects.filter(
+                            owner=tenant.owner
+                        ).first()
+      
+                        if commercial:
+                            property_name = commercial.commercialName
+                            property_type = commercial.stayType
+                            location = commercial.location
  
-                    if commercial:
-                        property_name = commercial.commercialName
-                        property_type = commercial.stayType
-                        location = commercial.location
- 
+        # =========================================
+        # ROOM / FLOOR DETAILS
+        # =========================================
         # =========================================
         # ROOM / FLOOR DETAILS
         # =========================================
         room_no = "N/A"
         floor_no = "N/A"
+        check_in = "N/A"
+        check_out = "N/A"
+        rent = "N/A"
  
         # HOSTEL TENANT
         hostel_bed = TenantBeds.objects.filter(
             phone__iexact=tenant.phone
         ).first()
- 
+  
         if hostel_bed:
             room_no = hostel_bed.roomno
             floor_no = hostel_bed.floor
- 
+            check_in = str(hostel_bed.checkIn) if hostel_bed.checkIn else "N/A"
+            check_out = str(hostel_bed.checkOut) if hostel_bed.checkOut else "N/A"
+            rent = str(hostel_bed.rent)
+  
         else:
             # APARTMENT TENANT
             apt_bed = ApartmentTenantBeds.objects.filter(
                 phone__iexact=tenant.phone
             ).first()
- 
+  
             if apt_bed:
                 room_no = apt_bed.flatno
                 floor_no = apt_bed.floor
- 
+                check_in = str(apt_bed.checkIn) if apt_bed.checkIn else "N/A"
+                check_out = str(apt_bed.checkOut) if apt_bed.checkOut else "N/A"
+                rent = str(apt_bed.rent)
+  
             else:
                 # COMMERCIAL TENANT
                 comm_bed = CommercialTenantBeds.objects.filter(
                     phone__iexact=tenant.phone
                 ).first()
- 
+  
                 if comm_bed:
                     room_no = comm_bed.sectionNo
                     floor_no = comm_bed.floor
+                    check_in = str(comm_bed.checkIn) if comm_bed.checkIn else "N/A"
+                    check_out = str(comm_bed.checkOut) if comm_bed.checkOut else "N/A"
+                    rent = str(comm_bed.rent)
+        
+        # Fallback to completed JoinRequest allotment room/flat/section info if not formally registered in beds table
+        if room_no == "N/A":
+            jr = JoinRequest.objects.filter(tenant=tenant, status='completed').order_by('-created_at').first()
+            if jr:
+                room_no = jr.sharing or jr.flat or jr.section or "N/A"
+                floor_no = "1"
+                check_in = str(jr.created_at.date()) if jr.created_at else "N/A"
+
+        aadhar_back_url = None
+        payment_screenshot_url = None
+        selfie_url = None
+
+        if getattr(tenant, 'aadhar_back_image', None):
+            aadhar_back_url = request.build_absolute_uri(tenant.aadhar_back_image.url)
+        if getattr(tenant, 'payment_screenshot', None):
+            payment_screenshot_url = request.build_absolute_uri(tenant.payment_screenshot.url)
+        if getattr(tenant, 'selfie', None):
+            selfie_url = request.build_absolute_uri(tenant.selfie.url)
  
         # =========================================
         # RESPONSE
@@ -1442,6 +1563,11 @@ def tenantdetails(request, phone):
             "gender": getattr(tenant, "gender", "N/A"),
             "identityType": getattr(tenant, "identityType", "N/A"),
             "identityImage": image_url,
+            "aadhar_id": getattr(tenant, "aadhar_id", "N/A"),
+            "aadhar_image": image_url,
+            "aadhar_back_image": aadhar_back_url,
+            "payment_screenshot": payment_screenshot_url,
+            "selfie": selfie_url,
  
             # PROPERTY
             "property_name": property_name,
@@ -1451,8 +1577,11 @@ def tenantdetails(request, phone):
             # ROOM
             "room_number": room_no,
             "floor_number": floor_no,
+            "check_in": check_in,
+            "check_out": check_out,
+            "rent": rent,
  
-            "status": getattr(tenant, "status", "pending"),
+            "status": "Occupied" if (not tenant.is_vacant and tenant.aadhar_id and tenant.aadhar_image) else "Vacated",
         }
  
         return Response(data, status=status.HTTP_200_OK)
@@ -2542,6 +2671,12 @@ def send_join_request(request):
         ).first()
         if not tenant:
             raise Tenent.DoesNotExist
+
+        if not tenant.is_vacant:
+            return Response(
+                {"error": "You already have an active stay. You must vacate your current property before booking another one."},
+                status=400
+            )
  
         owner = Owners.objects.filter(Q(owner_id=lookup_id) | Q(phone=lookup_id)).order_by('-created_at').first()
         if not owner:
@@ -2725,12 +2860,17 @@ def tenant_notifications(request, identifier):
  
     # JOIN REQUEST NOTIFICATIONS
     for r in requests:
+        status_val = r.status
+        if tenant.is_vacant or tenant.owner != r.owner:
+            if status_val in ['completed', 'accepted', 'allotted', 'joined', 'active']:
+                status_val = 'withdrawn'
         data.append({
             "id": f"req_{r.id}",
             "type": "JOIN_REQUEST",
             "propertyName": r.property_name,
-            "status": r.status,
-            "owner_phone": r.owner.owner_id if r.owner and r.owner.owner_id else (r.owner.phone if r.owner else None),
+            "status": status_val,
+            "owner_phone": r.owner.phone if r.owner else None,
+            "owner_id": r.owner.owner_id if r.owner and r.owner.owner_id else None,
             "created_at": r.created_at,
         })
  
@@ -2843,7 +2983,7 @@ def tenant_issues(request, identifier):
 @jwt_required()
 def owner_issues(request, phone):
     try:
-        owner = Owners.objects.filter(owner_id=phone).first()
+        owner = Owners.objects.filter(Q(owner_id=phone) | Q(phone=phone)).order_by('-created_at').first()
         if not owner:
             raise Owners.DoesNotExist
     except Owners.DoesNotExist:
@@ -3026,8 +3166,12 @@ def check_request_status(request, tenant_phone, owner_phone, property_name):
         ).order_by('-created_at').first()
  
         if join_req:
+            status_val = join_req.status
+            if tenant.is_vacant or tenant.owner != owner:
+                if status_val in ['completed', 'accepted', 'allotted', 'joined', 'active']:
+                    status_val = 'none'
             return Response({
-                "status": join_req.status
+                "status": status_val
             })
  
         return Response({
@@ -4345,3 +4489,127 @@ def update_building_layout(request, phone):
         return Response({"message": "Building layout updated successfully"}, status=200)
     except Exception as e:
         return Response({"error": str(e)}, status=500)
+
+
+@api_view(['POST'])
+@parser_classes([MultiPartParser, FormParser])
+@jwt_required()
+def tenant_submit_verification(request):
+    """
+    Submits identity verification (Aadhaar ID and screenshot upload) for a tenant.
+    """
+    print("--- [SUBMIT VERIFICATION DEBUG] ---")
+    print("RAW request.data:", dict(request.data))
+    print("RAW request.FILES:", dict(request.FILES))
+    
+    phone = request.data.get("phone")
+    aadhar_id = request.data.get("aadhar_id")
+    aadhar_image = request.FILES.get("aadhar_image")
+    aadhar_back_image = request.FILES.get("aadhar_back_image")
+    payment_screenshot = request.FILES.get("payment_screenshot")
+    selfie = request.FILES.get("selfie")
+    
+    print(f"Parsed fields -> Phone: '{phone}', Aadhar ID: '{aadhar_id}', Aadhar Image: '{aadhar_image}', Aadhar Back: '{aadhar_back_image}', Payment Screenshot: '{payment_screenshot}'")
+    
+    if not phone or not aadhar_id or not aadhar_image or not aadhar_back_image:
+        print("  [DEBUG] Failed: Missing fields")
+        return Response({"error": "All fields (Aadhar ID, Front and Back images) are required."}, status=400)
+        
+    # Validate Aadhar ID is 12 digits
+    aadhar_id = aadhar_id.strip()
+    if not aadhar_id.isdigit() or len(aadhar_id) != 12:
+        print(f"  [DEBUG] Failed: Aadhar ID format invalid ('{aadhar_id}')")
+        return Response({"error": "Aadhar ID must be exactly 12 numeric digits."}, status=400)
+        
+    # Validate Aadhar ID uniqueness
+    existing_tenant = Tenent.objects.filter(aadhar_id=aadhar_id).exclude(phone=phone).first()
+    if existing_tenant:
+        print(f"  [DEBUG] Failed: Aadhar ID '{aadhar_id}' already exists for tenant {existing_tenant.phone}")
+        return Response({"error": "This Aadhar ID is already registered to another user."}, status=400)
+        
+    try:
+        tenant = Tenent.objects.get(phone=phone)
+        tenant.aadhar_id = aadhar_id
+        tenant.aadhar_image = aadhar_image
+        tenant.aadhar_back_image = aadhar_back_image
+        if payment_screenshot:
+            tenant.payment_screenshot = payment_screenshot
+        if selfie:
+            tenant.selfie = selfie
+        tenant.is_vacant = False  # Set is_vacant to False immediately upon joining!
+        tenant.save()
+        
+        # ALSO update the JoinRequest status to 'completed'
+        join_req = JoinRequest.objects.filter(tenant=tenant, status__in=['accepted', 'allotted']).order_by('-created_at').first()
+        if join_req:
+            join_req.status = 'completed'
+            join_req.save()
+            print(f"  [DEBUG] Success: Updated JoinRequest {join_req.id} status to completed")
+            
+        print(f"  [DEBUG] Success: Saved details and checked-in tenant {phone}")
+        return Response({"message": "Verification submitted successfully!"}, status=200)
+    except Tenent.DoesNotExist:
+        print(f"  [DEBUG] Failed: Tenant {phone} not found")
+        return Response({"error": "Tenant not found."}, status=404)
+    except Exception as e:
+        print(f"  [DEBUG] Failed with exception: {str(e)}")
+        return Response({"error": str(e)}, status=500)
+
+
+@api_view(['GET'])
+@jwt_required()
+def get_co_residents(request, phone):
+    """
+    Returns all tenants sharing the same property/owner.
+    """
+    try:
+        tenant = Tenent.objects.filter(phone=phone).first()
+        if not tenant or not tenant.owner:
+            return Response({"co_residents": []}, status=200)
+            
+        owner = tenant.owner
+        co_residents = []
+        
+        # 1. Hostel Tenants
+        hostel_beds = TenantBeds.objects.filter(owner_phone=owner.owner_id).exclude(phone__iexact=phone)
+        for t in hostel_beds:
+            co_residents.append({
+                "id": t.id,
+                "name": t.name,
+                "phone": t.phone,
+                "room": f"Room {t.roomno}",
+                "property_type": "Hostel",
+                "rent": t.rent,
+                "checkIn": t.checkIn
+            })
+            
+        # 2. Apartment Tenants
+        apt_beds = ApartmentTenantBeds.objects.filter(owner_phone=owner.owner_id).exclude(phone__iexact=phone)
+        for t in apt_beds:
+            co_residents.append({
+                "id": t.id,
+                "name": t.name,
+                "phone": t.phone,
+                "room": f"Flat {t.flatno}",
+                "property_type": "Apartment",
+                "rent": t.rent,
+                "checkIn": t.checkIn
+            })
+            
+        # 3. Commercial Tenants
+        comm_beds = CommercialTenantBeds.objects.filter(owner_phone=owner.owner_id).exclude(phone__iexact=phone)
+        for t in comm_beds:
+            co_residents.append({
+                "id": t.id,
+                "name": t.name,
+                "phone": t.phone,
+                "room": f"Section {t.sectionNo}",
+                "property_type": "Commercial",
+                "rent": t.rent,
+                "checkIn": t.checkIn
+            })
+            
+        return Response({"co_residents": co_residents}, status=200)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+

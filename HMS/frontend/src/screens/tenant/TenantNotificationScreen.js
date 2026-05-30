@@ -13,6 +13,7 @@ import {
   Modal,
   ActivityIndicator,
   Image,
+  TextInput,
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -29,12 +30,17 @@ const TenantNotificationScreen = () => {
   const { requests, setRequests, refreshTrigger, markAllAsSeen, clearAllNotifications, clearedIds } = useContext(BookingContext);
   const [refreshing, setRefreshing] = useState(false);
   const [joiningIds, setJoiningIds] = useState([]);
+  const [phone, setPhone] = useState("");
   const [showIdModal, setShowIdModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedBackFile, setSelectedBackFile] = useState(null);
+  const [selectedSelfie, setSelectedSelfie] = useState(null);
+  const [selectedPaymentScreenshot, setSelectedPaymentScreenshot] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [aadharId, setAadharId] = useState("");
 
-  // Load persisted joined IDs from AsyncStorage on mount
+  // Load persisted joined IDs and phone number from AsyncStorage on mount
   useEffect(() => {
     const loadJoinedIds = async () => {
       try {
@@ -42,7 +48,14 @@ const TenantNotificationScreen = () => {
         if (stored) setJoiningIds(JSON.parse(stored));
       } catch (e) { }
     };
+    const loadPhone = async () => {
+      try {
+        const storedPhone = await AsyncStorage.getItem("tenantPhone");
+        if (storedPhone) setPhone(storedPhone);
+      } catch (e) { }
+    };
     loadJoinedIds();
+    loadPhone();
   }, []);
 
   const handleReject = async (item) => {
@@ -61,7 +74,7 @@ const TenantNotificationScreen = () => {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
-                    tenant_phone: tenantPhone,
+                    tenant_phone: phone || tenantPhone,
                     owner_phone: item.owner_phone || item.ownerEmail,
                     property_name: item.propertyName || item.property_name,
                   }),
@@ -83,10 +96,14 @@ const TenantNotificationScreen = () => {
     if (joiningIds.includes(item.id)) return;
     setSelectedItem(item);
     setSelectedFile(null);
+    setSelectedBackFile(null);
+    setSelectedSelfie(null);
+    setSelectedPaymentScreenshot(null);
+    setAadharId("");
     setShowIdModal(true);
   };
 
-  const handlePickDocument = async () => {
+  const handlePickDocument = async (type) => {
     try {
       const res = await DocumentPicker.getDocumentAsync({
         type: "image/*",
@@ -94,7 +111,10 @@ const TenantNotificationScreen = () => {
 
       if (!res.canceled && res.assets && res.assets.length > 0) {
         const asset = res.assets[0];
-        setSelectedFile(asset);
+        if (type === "front") setSelectedFile(asset);
+        else if (type === "back") setSelectedBackFile(asset);
+        else if (type === "selfie") setSelectedSelfie(asset);
+        else if (type === "payment") setSelectedPaymentScreenshot(asset);
       }
     } catch (err) {
       console.log("Error picking document", err);
@@ -102,38 +122,95 @@ const TenantNotificationScreen = () => {
   };
 
   const submitIdentityProof = async () => {
-    if (!selectedFile || !selectedItem) return;
+    const activePhone = await AsyncStorage.getItem("tenantPhone");
+    if (!activePhone) {
+      import("react-native").then(({ Alert }) => {
+        Alert.alert("Error", "Tenant details not found. Please log in again.");
+      });
+      return;
+    }
+
+    if (!selectedFile || !selectedBackFile || !selectedItem || !aadharId) {
+      import("react-native").then(({ Alert }) => {
+        Alert.alert("Error", "Please enter Aadhaar ID, and upload Aadhaar Front & Back images.");
+      });
+      return;
+    }
+
+    if (aadharId.length !== 12) {
+      import("react-native").then(({ Alert }) => {
+        Alert.alert("Error", "Aadhaar ID must be exactly 12 numeric digits.");
+      });
+      return;
+    }
 
     setUploading(true);
 
-    setTimeout(async () => {
-      const item = selectedItem;
-      const updatedIds = [...joiningIds, item.id];
-      setJoiningIds(updatedIds);
-
-      try {
-        await AsyncStorage.setItem("joinedRequestIds", JSON.stringify(updatedIds));
-        await AsyncStorage.setItem(`tenant_id_proof_${item.id}`, JSON.stringify(selectedFile));
-      } catch (e) { }
-
-      setUploading(false);
-      setShowIdModal(false);
-
-      navigation.replace("WelcomeScreen", {
-        propertyName: item.propertyName || item.property_name,
-        requestId: item.id,
+    try {
+      const formData = new FormData();
+      formData.append("phone", activePhone);
+      formData.append("aadhar_id", aadharId);
+      formData.append("aadhar_image", {
+        uri: selectedFile.uri,
+        name: selectedFile.name || "aadhar_front.jpg",
+        type: selectedFile.mimeType || "image/jpeg"
       });
-    }, 1200);
+      formData.append("aadhar_back_image", {
+        uri: selectedBackFile.uri,
+        name: selectedBackFile.name || "aadhar_back.jpg",
+        type: selectedBackFile.mimeType || "image/jpeg"
+      });
+
+      const res = await fetchWithAuth(`${BASE_URL}/api/tenant/submit_verification/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        body: formData,
+      });
+
+      const resData = await res.json();
+
+      if (res.ok) {
+        const item = selectedItem;
+        const updatedIds = [...joiningIds, item.id];
+        setJoiningIds(updatedIds);
+
+        try {
+          await AsyncStorage.setItem("joinedRequestIds", JSON.stringify(updatedIds));
+        } catch (e) { }
+
+        setUploading(false);
+        setShowIdModal(false);
+
+        navigation.replace("WelcomeScreen", {
+          propertyName: item.propertyName || item.property_name,
+          requestId: item.id,
+        });
+      } else {
+        setUploading(false);
+        import("react-native").then(({ Alert }) => {
+          Alert.alert("Failed to Submit", resData.error || "An unexpected error occurred.");
+        });
+      }
+    } catch (err) {
+      setUploading(false);
+      console.log("Error submitting identity proof:", err);
+      import("react-native").then(({ Alert }) => {
+        Alert.alert("Error", "Could not submit identity proof. Please check your network.");
+      });
+    }
   };
 
   const fetchRequests = async () => {
-    if (!tenantPhone) return;
+    const activePhone = phone || tenantPhone;
+    if (!activePhone) return;
 
     setRefreshing(true);
 
     try {
       const res = await fetchWithAuth(
-        `${BASE_URL}/api/tenant_notifications/${encodeURIComponent(tenantPhone)}/`
+        `${BASE_URL}/api/tenant_notifications/${encodeURIComponent(activePhone)}/`
       );
 
       const data = await res.json();
@@ -151,7 +228,7 @@ const TenantNotificationScreen = () => {
   useFocusEffect(
     useCallback(() => {
       fetchRequests();
-    }, [tenantPhone, refreshTrigger])
+    }, [phone, tenantPhone, refreshTrigger])
   );
 
   // Mark all as seen when requests are loaded
@@ -163,7 +240,7 @@ const TenantNotificationScreen = () => {
 
   const onRefresh = useCallback(() => {
     fetchRequests();
-  }, [tenantPhone]);
+  }, [phone, tenantPhone]);
 
   const getData = (item) => {
     if (item.type === "PAYMENT") {
@@ -472,16 +549,31 @@ const TenantNotificationScreen = () => {
               <View style={styles.infoBox}>
                 <Ionicons name="shield-checkmark" size={24} color={COLORS.PRIMARY} />
                 <Text style={styles.infoText}>
-                  Please upload your identity proof (Aadhaar, Passport, or PAN card) to join the property.
+                  Please enter your 12-digit Aadhaar ID and upload a screenshot proof to verify and join the property.
                 </Text>
               </View>
 
-              <Text style={styles.inputLabel}>Select Document</Text>
-              
+              <Text style={styles.inputLabel}>Aadhaar ID *</Text>
+              <View style={styles.textInputContainer}>
+                <Ionicons name="card-outline" size={20} color="#64748B" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Enter 12-digit Aadhaar ID"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="numeric"
+                  maxLength={12}
+                  value={aadharId}
+                  onChangeText={(text) => setAadharId(text.replace(/[^0-9]/g, ''))}
+                  editable={!uploading}
+                />
+              </View>
+
+              {/* AADHAAR FRONT */}
+              <Text style={styles.inputLabel}>Aadhaar Card Front Image *</Text>
               <TouchableOpacity
                 activeOpacity={0.8}
                 disabled={uploading}
-                onPress={handlePickDocument}
+                onPress={() => handlePickDocument("front")}
                 style={[
                   styles.uploadContainer,
                   selectedFile && styles.uploadContainerActive
@@ -492,11 +584,9 @@ const TenantNotificationScreen = () => {
                     <Image source={{ uri: selectedFile.uri }} style={styles.proofImagePreview} />
                     <View style={styles.fileDetails}>
                       <Text style={styles.fileName} numberOfLines={1}>
-                        {selectedFile.name || "identity_proof.jpg"}
+                        {selectedFile.name || "aadhar_front.jpg"}
                       </Text>
-                      <Text style={styles.fileSize}>
-                        {selectedFile.size ? `${(selectedFile.size / 1024 / 1024).toFixed(2)} MB` : "Image selected"}
-                      </Text>
+                      <Text style={styles.fileSize}>Image selected</Text>
                     </View>
                     <TouchableOpacity 
                       style={styles.deleteFileBtn} 
@@ -508,11 +598,44 @@ const TenantNotificationScreen = () => {
                   </View>
                 ) : (
                   <View style={styles.uploadPlaceholder}>
-                    <View style={styles.uploadIconCircle}>
-                      <Ionicons name="cloud-upload-outline" size={32} color={COLORS.PRIMARY} />
+                    <Ionicons name="image-outline" size={24} color={COLORS.PRIMARY} />
+                    <Text style={styles.uploadTitle}>Choose Aadhaar Front</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              {/* AADHAAR BACK */}
+              <Text style={styles.inputLabel}>Aadhaar Card Back Image *</Text>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                disabled={uploading}
+                onPress={() => handlePickDocument("back")}
+                style={[
+                  styles.uploadContainer,
+                  selectedBackFile && styles.uploadContainerActive
+                ]}
+              >
+                {selectedBackFile ? (
+                  <View style={styles.previewContainer}>
+                    <Image source={{ uri: selectedBackFile.uri }} style={styles.proofImagePreview} />
+                    <View style={styles.fileDetails}>
+                      <Text style={styles.fileName} numberOfLines={1}>
+                        {selectedBackFile.name || "aadhar_back.jpg"}
+                      </Text>
+                      <Text style={styles.fileSize}>Image selected</Text>
                     </View>
-                    <Text style={styles.uploadTitle}>Choose Identity Proof</Text>
-                    <Text style={styles.uploadSubtitle}>PNG, JPG, or PDF up to 5MB</Text>
+                    <TouchableOpacity 
+                      style={styles.deleteFileBtn} 
+                      disabled={uploading}
+                      onPress={() => setSelectedBackFile(null)}
+                    >
+                      <Ionicons name="trash-outline" size={20} color={COLORS.ERROR} />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.uploadPlaceholder}>
+                    <Ionicons name="image-outline" size={24} color={COLORS.PRIMARY} />
+                    <Text style={styles.uploadTitle}>Choose Aadhaar Back</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -534,11 +657,11 @@ const TenantNotificationScreen = () => {
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                disabled={!selectedFile || uploading}
+                disabled={!selectedFile || !selectedBackFile || !aadharId || uploading}
                 style={[
                   styles.modalActionBtn, 
                   styles.submitBtn,
-                  (!selectedFile || uploading) && styles.submitBtnDisabled
+                  (!selectedFile || !selectedBackFile || !aadharId || uploading) && styles.submitBtnDisabled
                 ]}
                 onPress={submitIdentityProof}
               >
@@ -914,6 +1037,26 @@ const styles = StyleSheet.create({
   },
   submitBtnDisabled: {
     backgroundColor: "rgba(139, 92, 246, 0.4)",
+  },
+  textInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FAF9FF",
+    borderWidth: 1,
+    borderColor: "rgba(139, 92, 246, 0.15)",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    marginBottom: 20,
+    height: 52,
+  },
+  inputIcon: {
+    marginRight: 10,
+  },
+  textInput: {
+    flex: 1,
+    fontSize: 15,
+    color: COLORS.TEXT_PRIMARY,
+    fontWeight: "600",
   },
 });
 

@@ -263,6 +263,12 @@ class Tenent(models.Model):
     name = models.CharField(max_length=100)
     phone = models.CharField(max_length=15)
     push_token = models.CharField(max_length=255, blank=True, null=True)
+    aadhar_id = models.CharField(max_length=12, unique=True, null=True, blank=True)
+    aadhar_image = models.ImageField(upload_to='aadhar_proofs/', null=True, blank=True)
+    aadhar_back_image = models.ImageField(upload_to='aadhar_proofs/', null=True, blank=True)
+    payment_screenshot = models.ImageField(upload_to='payment_proofs/', null=True, blank=True)
+    selfie = models.ImageField(upload_to='selfies/', null=True, blank=True)
+    is_vacant = models.BooleanField(default=True)
  
  
     def __str__(self):
@@ -334,6 +340,8 @@ class JoinRequest(models.Model):
         ('accepted', 'Accepted'),
         ('rejected', 'Rejected'),
         ('withdrawn', 'Withdrawn'),
+        ('completed', 'Completed'),
+        ('allotted', 'Allotted'),
     ]
  
     tenant = models.ForeignKey(Tenent, on_delete=models.CASCADE)

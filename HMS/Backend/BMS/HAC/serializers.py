@@ -210,6 +210,9 @@ class OwnerLoginSerializer(serializers.Serializer):
 
 
 class TenantBedSerializer(serializers.ModelSerializer):
+    aadhar_id = serializers.SerializerMethodField()
+    aadhar_image = serializers.SerializerMethodField()
+    aadhar_back_image = serializers.SerializerMethodField()
 
     class Meta:
         model = TenantBeds
@@ -227,17 +230,79 @@ class TenantBedSerializer(serializers.ModelSerializer):
             }
         }
 
+    def get_aadhar_id(self, obj):
+        t = Tenent.objects.filter(phone__iexact=obj.phone).first()
+        return t.aadhar_id if t else None
+
+    def get_aadhar_image(self, obj):
+        t = Tenent.objects.filter(phone__iexact=obj.phone).first()
+        request = self.context.get('request')
+        if t and t.aadhar_image and request:
+            return request.build_absolute_uri(t.aadhar_image.url)
+        return None
+
+    def get_aadhar_back_image(self, obj):
+        t = Tenent.objects.filter(phone__iexact=obj.phone).first()
+        request = self.context.get('request')
+        if t and t.aadhar_back_image and request:
+            return request.build_absolute_uri(t.aadhar_back_image.url)
+        return None
+
 
 class ApartmentBedSerializer(serializers.ModelSerializer):
+    aadhar_id = serializers.SerializerMethodField()
+    aadhar_image = serializers.SerializerMethodField()
+    aadhar_back_image = serializers.SerializerMethodField()
+
     class Meta:
         model = ApartmentTenantBeds
         fields = '__all__'
 
+    def get_aadhar_id(self, obj):
+        t = Tenent.objects.filter(phone__iexact=obj.phone).first()
+        return t.aadhar_id if t else None
+
+    def get_aadhar_image(self, obj):
+        t = Tenent.objects.filter(phone__iexact=obj.phone).first()
+        request = self.context.get('request')
+        if t and t.aadhar_image and request:
+            return request.build_absolute_uri(t.aadhar_image.url)
+        return None
+
+    def get_aadhar_back_image(self, obj):
+        t = Tenent.objects.filter(phone__iexact=obj.phone).first()
+        request = self.context.get('request')
+        if t and t.aadhar_back_image and request:
+            return request.build_absolute_uri(t.aadhar_back_image.url)
+        return None
+
 
 class CommercialBedSerializer(serializers.ModelSerializer):
+    aadhar_id = serializers.SerializerMethodField()
+    aadhar_image = serializers.SerializerMethodField()
+    aadhar_back_image = serializers.SerializerMethodField()
+
     class Meta:
         model = CommercialTenantBeds
         fields = '__all__'
+
+    def get_aadhar_id(self, obj):
+        t = Tenent.objects.filter(phone__iexact=obj.phone).first()
+        return t.aadhar_id if t else None
+
+    def get_aadhar_image(self, obj):
+        t = Tenent.objects.filter(phone__iexact=obj.phone).first()
+        request = self.context.get('request')
+        if t and t.aadhar_image and request:
+            return request.build_absolute_uri(t.aadhar_image.url)
+        return None
+
+    def get_aadhar_back_image(self, obj):
+        t = Tenent.objects.filter(phone__iexact=obj.phone).first()
+        request = self.context.get('request')
+        if t and t.aadhar_back_image and request:
+            return request.build_absolute_uri(t.aadhar_back_image.url)
+        return None
 
 class TenantRequestSerializer(serializers.ModelSerializer):
     class Meta:

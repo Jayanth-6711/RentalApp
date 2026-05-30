@@ -152,6 +152,8 @@ urlpatterns = [
 ),
     path('admin-login/', views.admin_login, name='admin_login'),
     path('save-push-token/', views.save_push_token, name='save_push_token'),
+    path('tenant/submit_verification/', views.tenant_submit_verification, name='tenant_submit_verification'),
+    path('tenant/co_residents/<str:phone>/', views.get_co_residents, name='get_co_residents'),
 ]
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

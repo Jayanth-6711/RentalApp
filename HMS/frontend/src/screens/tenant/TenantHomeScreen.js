@@ -3,6 +3,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";   //1 2
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
+import * as DocumentPicker from "expo-document-picker";
 import { useContext } from "react";
 import { BookingContext } from "@/src/context/BookingContext";
 import { useNavigation, useFocusEffect, useRoute } from "@react-navigation/native";
@@ -645,14 +646,12 @@ export default function TenantHomeScreen({ route }) {
 
     // 1. PRIORITY: ACCEPTED PROPERTIES
     const latestA = requests.find(r =>
-      normalize(r.propertyName || r.property_name) === normalize(a.name) &&
-      normalize(r.owner_phone) === normalize(a.ownerPhone)
+      normalize(r.propertyName || r.property_name) === normalize(a.name)
     );
     const isAcceptedA = latestA?.status?.toLowerCase() === "accepted" || latestA?.status?.toLowerCase() === "completed";
 
     const latestB = requests.find(r =>
-      normalize(r.propertyName || r.property_name) === normalize(b.name) &&
-      normalize(r.owner_phone) === normalize(b.ownerPhone)
+      normalize(r.propertyName || r.property_name) === normalize(b.name)
     );
     const isAcceptedB = latestB?.status?.toLowerCase() === "accepted" || latestB?.status?.toLowerCase() === "completed";
 
@@ -914,8 +913,7 @@ export default function TenantHomeScreen({ route }) {
               const normalize = (str) => (str || "").replace(/\s+/g, '').toLowerCase();
 
               const latestReq = requests.find(r =>
-                normalize(r.propertyName || r.property_name) === normalize(item.name) &&
-                normalize(r.owner_phone) === normalize(item.ownerPhone)
+                normalize(r.propertyName || r.property_name) === normalize(item.name)
               );
 
               const showBadge = latestReq && latestReq.status && latestReq.status !== 'none';
@@ -938,21 +936,26 @@ export default function TenantHomeScreen({ route }) {
                     <View style={homeStyles.cardBody}>
                       <View style={homeStyles.row}>
                         <Text style={homeStyles.cardName}>{item.name}</Text>
-                        {showBadge && (
+                        {showBadge ? (
                           <View style={[
                             homeStyles.statusBadge,
                             {
                               backgroundColor:
-                                latestReq.status?.toLowerCase() === "accepted" ? "#2ecc71" :
-                                  latestReq.status?.toLowerCase() === "completed" ? "#27ae60" :
-                                    latestReq.status?.toLowerCase() === "rejected" ? "#e74c3c" :
-                                      latestReq.status?.toLowerCase() === "withdrawn" ? "#95a5a6" : "#f39c12"
+                                latestReq.status?.toLowerCase() === "accepted" || latestReq.status?.toLowerCase() === "completed" || latestReq.status?.toLowerCase() === "allotted" ? "#2ecc71" :
+                                  latestReq.status?.toLowerCase() === "rejected" ? "#e74c3c" :
+                                    latestReq.status?.toLowerCase() === "withdrawn" ? "#95a5a6" : "#f39c12"
                             }
                           ]}>
                             <Text style={homeStyles.statusText}>
-                              {latestReq.status?.toLowerCase() === "completed" ? "COMPLETED" : latestReq.status.toUpperCase()}
+                              {latestReq.status?.toLowerCase() === "completed" || latestReq.status?.toLowerCase() === "accepted" || latestReq.status?.toLowerCase() === "allotted" ? "ACCEPTED" : latestReq.status.toUpperCase()}
                             </Text>
                           </View>
+                        ) : (
+                          item.isAvailable && (
+                            <View style={[homeStyles.statusBadge, { backgroundColor: "#3498db" }]}>
+                              <Text style={homeStyles.statusText}>VACANT</Text>
+                            </View>
+                          )
                         )}
                       </View>
                       <Text style={homeStyles.cardSub} numberOfLines={2}>
@@ -1274,7 +1277,7 @@ export function PropertyDetailsScreen(props) {
   const navigation = useNavigation();
   const { tenantEmail, tenantPhone } = useContext(TenantContext);
   const bookingContext = useContext(BookingContext);
-  const { requests = [], setRequests } = bookingContext || {};
+  const { requests = [], setRequests, isJoined } = bookingContext || {};
 
   // Find initial status from context to avoid flickering
   const initialStatus = requests.find(r => r.propertyName === property.name)?.status || "none";
@@ -1318,22 +1321,33 @@ export function PropertyDetailsScreen(props) {
   let buttonDisabled = false;
   let buttonColor = COLORS.PRIMARY;
 
-  if (requestStatus === "pending") {
-    buttonText = "Pending - Withdraw";
+  const normalizedStatus = (requestStatus || "").toLowerCase();
+
+  if (normalizedStatus === "pending") {
+    buttonText = "Withdraw Request";
     buttonAction = "withdraw";
     buttonColor = "#f39c12";
   }
-  else if (requestStatus === "accepted") {
-    buttonText = "Accepted - Withdraw";
-    buttonAction = "withdraw";   // 🔥 same withdraw API
-    buttonColor = "#0a9516ff";
+  else if (
+    ["completed", "joined", "active", "occupied"].includes(normalizedStatus)
+  ) {
+    buttonText = "Joined";
+    buttonAction = "none";
+    buttonDisabled = true;
+    buttonColor = "#27ae60";
   }
-  else if (requestStatus === "rejected") {
-    buttonText = "Rejected - Request Again";
+  else if (["accepted", "allotted"].includes(normalizedStatus)) {
+    buttonText = "Join Now";
+    buttonAction = "status";
+    buttonDisabled = false;
+    buttonColor = "#2ecc71";
+  }
+  else if (normalizedStatus === "rejected") {
+    buttonText = "Book Now";
     buttonAction = "book";
-    buttonColor = "#e74c3c";
+    buttonColor = COLORS.PRIMARY;
   }
-  else if (requestStatus === "withdrawn") {
+  else {
     buttonText = "Book Now";
     buttonAction = "book";
     buttonColor = COLORS.PRIMARY;
@@ -1369,6 +1383,93 @@ export function PropertyDetailsScreen(props) {
   // Add this near your other useState hooks
   const [selectedGalleryIndex, setSelectedGalleryIndex] = useState(null);
   const [statusModalVisible, setStatusModalVisible] = useState(false);
+  const [showIdModal, setShowIdModal] = useState(false);
+  const [aadharId, setAadharId] = useState("");
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedBackFile, setSelectedBackFile] = useState(null);
+  const [selectedSelfie, setSelectedSelfie] = useState(null);
+  const [selectedPaymentScreenshot, setSelectedPaymentScreenshot] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handlePickDocument = async (type) => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: "image/*",
+      });
+
+      if (!res.canceled && res.assets && res.assets.length > 0) {
+        const asset = res.assets[0];
+        if (type === "front") setSelectedFile(asset);
+        else if (type === "back") setSelectedBackFile(asset);
+        else if (type === "selfie") setSelectedSelfie(asset);
+        else if (type === "payment") setSelectedPaymentScreenshot(asset);
+      }
+    } catch (err) {
+      console.log("Error picking document", err);
+    }
+  };
+
+  const submitIdentityProof = async () => {
+    const activePhone = await AsyncStorage.getItem("tenantPhone");
+    if (!activePhone) {
+      Alert.alert("Error", "Tenant details not found. Please log in again.");
+      return;
+    }
+
+    if (!selectedFile || !selectedBackFile || !aadharId) {
+      Alert.alert("Error", "Please enter Aadhaar ID, and upload Aadhaar Front & Back images.");
+      return;
+    }
+
+    if (aadharId.length !== 12) {
+      Alert.alert("Error", "Aadhaar ID must be exactly 12 numeric digits.");
+      return;
+    }
+
+    setUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("phone", activePhone);
+      formData.append("aadhar_id", aadharId);
+      formData.append("aadhar_image", {
+        uri: selectedFile.uri,
+        name: selectedFile.name || "aadhar_front.jpg",
+        type: selectedFile.mimeType || "image/jpeg"
+      });
+      formData.append("aadhar_back_image", {
+        uri: selectedBackFile.uri,
+        name: selectedBackFile.name || "aadhar_back.jpg",
+        type: selectedBackFile.mimeType || "image/jpeg"
+      });
+
+      const res = await fetchWithAuth(`${BASE_URL}/api/tenant/submit_verification/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        body: formData,
+      });
+
+      const resData = await res.json();
+
+      if (res.ok) {
+        setUploading(false);
+        setShowIdModal(false);
+        Alert.alert("Success", "Identity proof submitted successfully! You are now joined.");
+        if (bookingContext?.setRefreshTrigger) {
+          bookingContext.setRefreshTrigger(prev => prev + 1);
+        }
+      } else {
+        setUploading(false);
+        Alert.alert("Failed to Submit", resData.error || "An unexpected error occurred.");
+      }
+    } catch (err) {
+      setUploading(false);
+      console.log("Error submitting identity proof:", err);
+      Alert.alert("Error", "Could not submit identity proof. Please check your network.");
+    }
+  };
 
   const facilityIcons = {
     WiFi: "wifi",
@@ -1470,6 +1571,10 @@ export function PropertyDetailsScreen(props) {
 
   const confirmBooking = async () => {
     try {
+      if (isJoined) {
+        alert("You are already staying in a property. Please vacate or contact the owner before requesting another property.");
+        return;
+      }
       // --- 1. Date Validation ---
       if (!checkIn.trim()) {
         alert("Please enter a Check-in date");
@@ -1600,23 +1705,113 @@ export function PropertyDetailsScreen(props) {
     }
   };
 
+  const performWithdraw = async () => {
+    try {
+      const normalize = (str) => (str || "").replace(/\s+/g, '').toLowerCase();
+      console.log("--- WITHDRAW ACTION START ---");
+      console.log("Property Name:", property.name);
+      console.log("Owner Email:", property.contact);
+      console.log("Tenant Phone:", tenantPhone);
+
+      // Optimistic update for immediate feedback in the list
+      if (setRequests) {
+        console.log("Performing Optimistic Sync...");
+        setRequests(prev => {
+          return prev.map(r => {
+            const rName = normalize(r.propertyName || r.property_name);
+            const pName = normalize(property.name);
+            const rOwner = normalize(r.contact || r.owner_phone);
+            const pOwner = normalize(property.contact);
+
+            const nameMatch = rName === pName;
+            const ownerMatch = rOwner === pOwner;
+
+            if (nameMatch && ownerMatch && ["pending", "accepted", "allotted"].includes(r.status)) {
+              console.log(`Optimistic Match Found! Updating request ${r.id} to withdrawn`);
+              return { ...r, status: "withdrawn" };
+            }
+            return r;
+          });
+        });
+      }
+
+      const res = await fetch(`${BASE_URL}/api/withdraw_request/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenant_phone: tenantPhone,
+          owner_id: property.owner_id || "",
+          owner_phone: property.contact,
+          property_name: property.name,
+        }),
+      });
+      const data = await res.json();
+      console.log("Withdraw API Response:", data);
+
+      // Final sync from backend
+      if (fetchTenantRequests) {
+        console.log("Re-fetching tenant requests for final sync...");
+        await fetchTenantRequests();
+      }
+      if (fetchProperties) fetchProperties();
+      if (bookingContext?.setRefreshTrigger) {
+        bookingContext.setRefreshTrigger(prev => prev + 1);
+      }
+
+      setStatusModalVisible(false);
+      setRequestStatus("withdrawn");
+
+      if (data.updated_count === 0) {
+        console.warn("API reported 0 records updated. Possibly no matching active request.");
+        alert("This request was already withdrawn or could not be found.");
+        if (fetchTenantRequests) fetchTenantRequests();
+      } else {
+        console.log(`Successfully withdrawn ${data.updated_count} records.`);
+        alert("Request withdrawn successfully. The owner has been notified.");
+      }
+    } catch (error) {
+      console.error("Withdraw Error:", error);
+      alert("Failed to withdraw request.");
+      if (fetchTenantRequests) fetchTenantRequests();
+    }
+  };
+
   const handleBookingAction = async () => {
     try {
       // 👉 OPEN FORM
       if (buttonAction === "book") {
+        if (isJoined) {
+          Alert.alert(
+            "Already Staying",
+            "You are already staying in a property. Please vacate or contact the owner before requesting another property."
+          );
+          return;
+        }
         setBookingVisible(true);
         return;
       }
 
-      // 👉 OPEN STATUS MODAL (For Pending or Accepted)
-      if (requestStatus === "pending" || requestStatus === "accepted") {
-        setStatusModalVisible(true);
+      // 👉 WITHDRAW REQUEST
+      if (buttonAction === "withdraw") {
+        Alert.alert(
+          "Withdraw Request",
+          "Are you sure you want to withdraw your booking request?",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Withdraw", style: "destructive", onPress: performWithdraw }
+          ]
+        );
         return;
       }
 
-      // 👉 WITHDRAW REQUEST (Directly - optional, but user wants modal)
-      if (buttonAction === "withdraw") {
-        setStatusModalVisible(true); // Open modal instead of direct withdraw
+      // 👉 OPEN STATUS MODAL (For Accepted/Joined)
+      if (requestStatus === "accepted" || requestStatus === "completed" || requestStatus === "allotted") {
+        if (requestStatus === "completed") {
+          setStatusModalVisible(true);
+        } else {
+          setShowIdModal(true);
+        }
+        return;
       }
     } catch (error) {
       console.log("Booking action error:", error);
@@ -1720,9 +1915,20 @@ export function PropertyDetailsScreen(props) {
             <Text style={styles.name}>
               {requestStatus === "accepted" ? `Welcome to ${property.name}` : property.name}
             </Text>
-            <View style={[styles.statusBadge, requestStatus === "accepted" && { backgroundColor: "#2ecc71" }]}>
-              <Text style={[styles.statusText, requestStatus === "accepted" && { color: "#fff" }]}>
-                {requestStatus === "accepted" ? "Accepted" : (property.isAvailable ? "Available" : "Full")}
+            <View style={[
+              styles.statusBadge, 
+              (requestStatus === "accepted" || requestStatus === "completed" || requestStatus === "allotted") && { backgroundColor: "#2ecc71" },
+              requestStatus === "pending" && { backgroundColor: "#f39c12" },
+              requestStatus === "rejected" && { backgroundColor: "#e74c3c" }
+            ]}>
+              <Text style={[
+                styles.statusText, 
+                (requestStatus === "accepted" || requestStatus === "completed" || requestStatus === "allotted" || requestStatus === "pending" || requestStatus === "rejected") && { color: "#fff" }
+              ]}>
+                {requestStatus === "accepted" || requestStatus === "completed" || requestStatus === "allotted" ? "Joined" : 
+                 requestStatus === "pending" ? "Pending" :
+                 requestStatus === "rejected" ? "Rejected" :
+                 (property.isAvailable ? "Vacant" : "Full")}
               </Text>
             </View>
           </View>
@@ -2199,25 +2405,33 @@ export function PropertyDetailsScreen(props) {
           <Ionicons name="logo-whatsapp" size={22} color="#25D366" />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          disabled={buttonDisabled}
-          onPress={handleBookingAction}
-          style={{
-            backgroundColor: buttonColor,
-            flex: 1,
-            height: 50,
-            borderRadius: 12,
-            alignItems: "center",
-            justifyContent: "center",
-            opacity: (buttonDisabled && requestStatus !== "accepted") ? 0.6 : 1,
-          }}
-        >
-          <Text
-            style={{ color: "#fff", fontWeight: "bold", fontSize: 16 }}
+        {isJoined && buttonAction === "book" ? (
+          <View style={{ flex: 1, paddingLeft: 12, justifyContent: "center" }}>
+            <Text style={{ color: "#e74c3c", fontSize: 11, fontWeight: "600", textAlign: "center" }}>
+              You are already staying in a property. Please vacate or contact the owner before requesting another property.
+            </Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            disabled={buttonDisabled}
+            onPress={handleBookingAction}
+            style={{
+              backgroundColor: buttonColor,
+              flex: 1,
+              height: 50,
+              borderRadius: 12,
+              alignItems: "center",
+              justifyContent: "center",
+              opacity: (buttonDisabled && requestStatus !== "accepted") ? 0.6 : 1,
+            }}
           >
-            {buttonText}
-          </Text>
-        </TouchableOpacity>
+            <Text
+              style={{ color: "#fff", fontWeight: "bold", fontSize: 16 }}
+            >
+              {buttonText}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
       {/* --- STATUS MODAL (POP-UP) --- */}
       <Modal
@@ -2236,7 +2450,7 @@ export function PropertyDetailsScreen(props) {
             </View>
 
             <View style={{ alignItems: "center", marginVertical: 20 }}>
-              {requestStatus === "accepted" ? (
+              {requestStatus === "accepted" || requestStatus === "completed" || requestStatus === "allotted" ? (
                 <>
                   <MaterialCommunityIcons name="party-popper" size={60} color="#0a9516ff" />
                   <Text style={[styles.modalTitle, { fontSize: 24, marginTop: 15, textAlign: "center" }]}>
@@ -2261,77 +2475,7 @@ export function PropertyDetailsScreen(props) {
 
             <View style={{ gap: 12, marginTop: 10 }}>
               <TouchableOpacity
-                onPress={async () => {
-                  try {
-                    const normalize = (str) => (str || "").replace(/\s+/g, '').toLowerCase();
-                    console.log("--- WITHDRAW ACTION START ---");
-                    console.log("Property Name:", property.name);
-                    console.log("Owner Email:", property.contact);
-                    console.log("Tenant Email:", tenantEmail);
-
-                    // Optimistic update for immediate feedback in the list
-                    if (setRequests) {
-                      console.log("Performing Optimistic Sync...");
-                      setRequests(prev => {
-                        const newRequests = prev.map(r => {
-                          const rName = normalize(r.propertyName || r.property_name);
-                          const pName = normalize(property.name);
-                          const rOwner = normalize(r.contact || r.owner_phone);
-                          const pOwner = normalize(property.contact);
-
-                          const nameMatch = rName === pName;
-                          const ownerMatch = rOwner === pOwner;
-
-                          if (nameMatch && ownerMatch && ["pending", "accepted", "allotted"].includes(r.status)) {
-                            console.log(`Optimistic Match Found! Updating request ${r.id} to withdrawn`);
-                            return { ...r, status: "withdrawn" };
-                          }
-                          return r;
-                        });
-                        return newRequests;
-                      });
-                    }
-
-                    const res = await fetch(`${BASE_URL}/api/withdraw_request/`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        tenant_phone: tenantPhone,
-                        owner_id: property.owner_id || "",
-                        owner_phone: property.contact,
-                        property_name: property.name,
-                      }),
-                    });
-                    const data = await res.json();
-                    console.log("Withdraw API Response:", data);
-
-                    // Final sync from backend
-                    if (fetchTenantRequests) {
-                      console.log("Re-fetching tenant requests for final sync...");
-                      await fetchTenantRequests();
-                    }
-                    if (fetchProperties) fetchProperties();
-                    if (bookingContext?.setRefreshTrigger) {
-                      bookingContext.setRefreshTrigger(prev => prev + 1);
-                    }
-
-                    setStatusModalVisible(false);
-                    setRequestStatus("withdrawn");
-
-                    if (data.updated_count === 0) {
-                      console.warn("API reported 0 records updated. Possibly no matching active request.");
-                      alert("This request was already withdrawn or could not be found.");
-                      if (fetchTenantRequests) fetchTenantRequests();
-                    } else {
-                      console.log(`Successfully withdrawn ${data.updated_count} records.`);
-                      alert("Request withdrawn successfully. The owner has been notified.");
-                    }
-                  } catch (error) {
-                    console.error("Withdraw Error:", error);
-                    alert("Failed to withdraw request.");
-                    if (fetchTenantRequests) fetchTenantRequests();
-                  }
-                }}
+                onPress={performWithdraw}
                 style={[styles.submitBtn, { backgroundColor: "#fff", borderWidth: 1, borderColor: "#ff4d4d" }]}
               >
                 <Text style={{ color: "#ff4d4d", fontWeight: "bold", fontSize: 16 }}>
@@ -2345,6 +2489,161 @@ export function PropertyDetailsScreen(props) {
               >
                 <Text style={{ color: "#333", fontWeight: "bold", fontSize: 16 }}>
                   Close
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- IDENTITY VERIFICATION MODAL --- */}
+      <Modal
+        visible={showIdModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          if (!uploading) setShowIdModal(false);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Identity Verification</Text>
+              <TouchableOpacity 
+                disabled={uploading} 
+                onPress={() => setShowIdModal(false)}
+                style={styles.modalCloseBtn}
+              >
+                <Ionicons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView 
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.modalScrollContent}
+            >
+              <View style={styles.infoBox}>
+                <Ionicons name="shield-checkmark" size={24} color={COLORS.PRIMARY} />
+                <Text style={styles.infoText}>
+                  Please enter your 12-digit Aadhaar ID and upload a screenshot proof to verify and join the property.
+                </Text>
+              </View>
+
+              <Text style={styles.inputLabel}>Aadhaar ID *</Text>
+              <View style={styles.textInputContainer}>
+                <Ionicons name="card-outline" size={20} color="#64748B" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Enter 12-digit Aadhaar ID"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="numeric"
+                  maxLength={12}
+                  value={aadharId}
+                  onChangeText={(text) => setAadharId(text.replace(/[^0-9]/g, ''))}
+                  editable={!uploading}
+                />
+              </View>
+
+              {/* AADHAAR FRONT */}
+              <Text style={styles.inputLabel}>Aadhaar Card Front Image *</Text>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                disabled={uploading}
+                onPress={() => handlePickDocument("front")}
+                style={[
+                  styles.verificationUploadContainer,
+                  selectedFile && styles.verificationUploadContainerActive
+                ]}
+              >
+                {selectedFile ? (
+                  <View style={styles.previewContainer}>
+                    <Image source={{ uri: selectedFile.uri }} style={styles.proofImagePreview} />
+                    <View style={styles.fileDetails}>
+                      <Text style={styles.fileName} numberOfLines={1}>
+                        {selectedFile.name || "aadhar_front.jpg"}
+                      </Text>
+                      <Text style={styles.fileSize}>Image selected</Text>
+                    </View>
+                    <TouchableOpacity 
+                      style={styles.deleteFileBtn} 
+                      disabled={uploading}
+                      onPress={() => setSelectedFile(null)}
+                    >
+                      <Ionicons name="trash-outline" size={20} color={COLORS.ERROR} />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.uploadPlaceholder}>
+                    <Ionicons name="image-outline" size={24} color={COLORS.PRIMARY} />
+                    <Text style={styles.uploadTitle}>Choose Aadhaar Front</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              {/* AADHAAR BACK */}
+              <Text style={styles.inputLabel}>Aadhaar Card Back Image *</Text>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                disabled={uploading}
+                onPress={() => handlePickDocument("back")}
+                style={[
+                  styles.verificationUploadContainer,
+                  selectedBackFile && styles.verificationUploadContainerActive
+                ]}
+              >
+                {selectedBackFile ? (
+                  <View style={styles.previewContainer}>
+                    <Image source={{ uri: selectedBackFile.uri }} style={styles.proofImagePreview} />
+                    <View style={styles.fileDetails}>
+                      <Text style={styles.fileName} numberOfLines={1}>
+                        {selectedBackFile.name || "aadhar_back.jpg"}
+                      </Text>
+                      <Text style={styles.fileSize}>Image selected</Text>
+                    </View>
+                    <TouchableOpacity 
+                      style={styles.deleteFileBtn} 
+                      disabled={uploading}
+                      onPress={() => setSelectedBackFile(null)}
+                    >
+                      <Ionicons name="trash-outline" size={20} color={COLORS.ERROR} />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.uploadPlaceholder}>
+                    <Ionicons name="image-outline" size={24} color={COLORS.PRIMARY} />
+                    <Text style={styles.uploadTitle}>Choose Aadhaar Back</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              {/* LIVE PHOTO / SELFIE */}
+              <View style={styles.guidelinesBox}>
+                <Text style={styles.guidelineTitle}>Upload Guidelines:</Text>
+                <Text style={styles.guidelineItem}>• Document must be clearly visible and not blurry.</Text>
+                <Text style={styles.guidelineItem}>• Ensure all four edges of the document are captured.</Text>
+                <Text style={styles.guidelineItem}>• High resolution JPG, PNG formats are accepted.</Text>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalActionRow}>
+              <TouchableOpacity
+                disabled={uploading}
+                style={[styles.modalActionBtn, styles.cancelBtn]}
+                onPress={() => setShowIdModal(false)}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                disabled={!selectedFile || !selectedBackFile || !aadharId || uploading}
+                style={[
+                  styles.modalActionBtn, 
+                  styles.submitBtn,
+                  (!selectedFile || !selectedBackFile || !aadharId || uploading) && styles.submitBtnDisabled
+                ]}
+                onPress={submitIdentityProof}
+              >
+                <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>
+                  {uploading ? "Submitting..." : "Get Started"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -3498,6 +3797,139 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 10,
     fontWeight: "bold",
+  },
+  modalScrollContent: {
+    paddingBottom: 24,
+  },
+  infoBox: {
+    flexDirection: "row",
+    backgroundColor: "#F1F5F9",
+    padding: 16,
+    borderRadius: 16,
+    alignItems: "center",
+    marginBottom: 24,
+    gap: 12,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#64748B",
+    lineHeight: 18,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1E293B",
+    marginBottom: 8,
+    marginTop: 16,
+  },
+  textInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+  },
+  inputIcon: {
+    marginRight: 8,
+  },
+  proofImagePreview: {
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+    marginRight: 12,
+  },
+  fileDetails: {
+    flex: 1,
+  },
+  fileName: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1E293B",
+  },
+  fileSize: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  deleteFileBtn: {
+    padding: 8,
+  },
+  uploadPlaceholder: {
+    alignItems: "center",
+    gap: 8,
+  },
+  uploadTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.PRIMARY,
+  },
+  guidelinesBox: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 24,
+  },
+  guidelineTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#64748B",
+    marginBottom: 8,
+  },
+  guidelineItem: {
+    fontSize: 11,
+    color: "#94A3B8",
+    marginBottom: 4,
+  },
+  modalActionRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 24,
+  },
+  modalActionBtn: {
+    flex: 1,
+    height: 50,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelBtn: {
+    backgroundColor: "#F1F5F9",
+  },
+  cancelBtnText: {
+    color: "#64748B",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  submitBtnDisabled: {
+    backgroundColor: "#CBD5E1",
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  verificationUploadContainer: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+    borderStyle: "dashed",
+    borderRadius: 16,
+    padding: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 100,
+    marginBottom: 8,
+  },
+  verificationUploadContainerActive: {
+    borderStyle: "solid",
+    borderColor: COLORS.PRIMARY,
+    backgroundColor: "#F5F3FF",
+  },
+  previewContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
   },
 });
 

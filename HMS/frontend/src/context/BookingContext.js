@@ -39,6 +39,9 @@ export const BookingProvider = ({ children }) => {
       : undefined;
   }, [sound]);
 
+  const [isJoined, setIsJoined] = useState(false);
+  const [isTenantVacated, setIsTenantVacated] = useState(false);
+
   // 1. Initial Data Load
   useEffect(() => {
     const loadData = async () => {
@@ -61,16 +64,31 @@ export const BookingProvider = ({ children }) => {
   // 1.5. Fetch Initial Requests & Sync
   const fetchRequests = async () => {
     if (!userPhone) return;
+
     try {
-      // We check owner_requests by default, if empty maybe check tenant
-      // but usually the ownerPhone is stored for owners
       const isOwner = await AsyncStorage.getItem("ownerPhone");
       const endpoint = isOwner ? "owner_requests" : "tenant_notifications";
 
-      const response = await fetchWithAuth(`${BASE_URL}/api/${endpoint}/${encodeURIComponent(userPhone)}/`);
+      const response = await fetchWithAuth(
+        `${BASE_URL}/api/${endpoint}/${encodeURIComponent(userPhone)}/`
+      );
+
       const data = await response.json();
+
       if (Array.isArray(data)) {
         setRequests(data);
+      }
+
+      if (!isOwner) {
+        const detailsRes = await fetchWithAuth(
+          `${BASE_URL}/api/tenantdetails/${encodeURIComponent(userPhone)}/`
+        );
+        if (detailsRes.ok) {
+          const detailsData = await detailsRes.json();
+          setIsTenantVacated(detailsData && detailsData.status === "Vacated");
+        }
+      } else {
+        setIsTenantVacated(false);
       }
     } catch (error) {
       console.log("Fetch Requests Error:", error);
@@ -78,8 +96,34 @@ export const BookingProvider = ({ children }) => {
   };
 
   useEffect(() => {
+    if (isTenantVacated) {
+      setIsJoined(false);
+      return;
+    }
+
+    const joined = requests.some((item) => {
+      const status = (item.status || "").toLowerCase();
+
+      return [
+        "completed",
+        "joined",
+        "active",
+        "occupied",
+      ].includes(status);
+    });
+
+    setIsJoined(joined);
+  }, [requests, isTenantVacated]);
+
+  useEffect(() => {
     fetchRequests();
   }, [userPhone, refreshTrigger]);
+
+  useEffect(() => {
+    console.log("Requests:", requests);
+    console.log("isTenantVacated:", isTenantVacated);
+    console.log("isJoined:", isJoined);
+  }, [requests, isTenantVacated, isJoined]);
 
   // NEW: Poling as backup to WebSocket for robust UI updates
   useEffect(() => {
@@ -191,6 +235,7 @@ export const BookingProvider = ({ children }) => {
       value={{
         requests,
         setRequests,
+        isJoined,
         pendingCount,
         userPhone,
         setuserPhone,

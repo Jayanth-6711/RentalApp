@@ -1,5 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, SafeAreaView, StatusBar, Linking, Platform } from 'react-native';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  FlatList, 
+  TouchableOpacity, 
+  ActivityIndicator, 
+  SafeAreaView, 
+  StatusBar, 
+  Linking, 
+  Platform,
+  Modal,
+  Alert,
+  ScrollView,
+  Image
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BASE_URL, { fetchWithAuth } from '../../config/Api';
@@ -7,6 +22,11 @@ import BASE_URL, { fetchWithAuth } from '../../config/Api';
 export default function OwnerTenantsScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [tenants, setTenants] = useState([]);
+  
+  // Details Modal States
+  const [selectedTenantDetails, setSelectedTenantDetails] = useState(null);
+  const [fetchingDetails, setFetchingDetails] = useState(false);
+  const [detailsModalVisible, setDetailsModalVisible] = useState(false);
 
   useEffect(() => {
     fetchTenants();
@@ -14,6 +34,7 @@ export default function OwnerTenantsScreen({ navigation }) {
 
   const fetchTenants = async () => {
     try {
+      setLoading(true);
       let storedId = await AsyncStorage.getItem('ownerPhone');
       if (!storedId) return;
 
@@ -62,17 +83,123 @@ export default function OwnerTenantsScreen({ navigation }) {
     }
   };
 
+  const handleViewTenantDetails = async (tenant) => {
+    try {
+      const phone = tenant.phone || tenant.mobile || tenant.contact;
+      if (!phone) {
+        Alert.alert("Error", "Tenant phone number not found.");
+        return;
+      }
+      setFetchingDetails(true);
+      setDetailsModalVisible(true);
+      
+      const res = await fetchWithAuth(`${BASE_URL}/api/tenantdetails/${encodeURIComponent(phone.trim())}/`);
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedTenantDetails({
+          ...data,
+          bed_record_id: tenant.id,
+          stay_type: tenant.type || data.property_type,
+        });
+      } else {
+        Alert.alert("Error", "Failed to load tenant verification details.");
+        setDetailsModalVisible(false);
+      }
+    } catch (error) {
+      console.log("Error loading tenant details:", error);
+      Alert.alert("Error", "Error loading tenant verification details.");
+      setDetailsModalVisible(false);
+    } finally {
+      setFetchingDetails(false);
+    }
+  };
+
+  const handleVacateTenant = async () => {
+    if (!selectedTenantDetails) return;
+    const { name, bed_record_id, stay_type } = selectedTenantDetails;
+
+    Alert.alert(
+      "Vacate Tenant",
+      `Are you sure you want to vacate ${name} from this property?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Vacate",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const stayTypeLower = (stay_type || "").toLowerCase();
+              const endpointMap = {
+                hostel: 'deletehostel',
+                apartment: 'deleteapartment',
+                commercial: 'deletecommercial',
+              };
+              const endpoint = endpointMap[stayTypeLower];
+              if (!endpoint) {
+                Alert.alert("Error", `Unsupported stay type: ${stay_type}`);
+                return;
+              }
+
+              const res = await fetchWithAuth(`${BASE_URL}/api/${endpoint}/${bed_record_id}/`, {
+                method: "DELETE",
+              });
+
+              if (res.ok) {
+                Alert.alert("Success", "Tenant vacated successfully");
+                setDetailsModalVisible(false);
+                fetchTenants(); // reload tenant list
+              } else {
+                Alert.alert("Error", "Failed to vacate tenant");
+              }
+            } catch (err) {
+              console.error("Vacate Error:", err);
+              Alert.alert("Error", "Error vacating tenant.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const renderTenant = ({ item }) => (
-    <View style={styles.tenantCard}>
-      <View style={styles.tenantIcon}>
-        <Text style={styles.tenantInitial}>{item.name ? item.name.charAt(0) : 'T'}</Text>
+    <TouchableOpacity 
+      activeOpacity={0.8}
+      style={styles.tenantCard}
+      onPress={() => handleViewTenantDetails(item)}
+    >
+      <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={styles.tenantIcon}>
+            <Text style={styles.tenantInitial}>{item.name ? item.name.charAt(0) : 'T'}</Text>
+          </View>
+          <View style={styles.tenantInfo}>
+            <Text style={styles.tenantName}>{item.name}</Text>
+            <Text style={styles.tenantDetail}>Phone: {item.phone}</Text>
+            <Text style={styles.tenantDetail}>{item.type} • Room {item.roomno || item.flatno || item.sectionNo}</Text>
+            <Text style={[styles.tenantDetail, { marginTop: 4, color: item.aadhar_id ? '#10B981' : '#F59E0B', fontWeight: '600' }]}>
+              Aadhaar: {item.aadhar_id || "Pending Verification"}
+            </Text>
+          </View>
+        </View>
+
+        {item.aadhar_image && (
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 12, paddingLeft: 64 }}>
+            <View>
+              <Text style={{ fontSize: 10, color: '#6B7280', marginBottom: 2 }}>Aadhaar Front</Text>
+              <Image source={{ uri: item.aadhar_image }} style={{ width: 65, height: 45, borderRadius: 6, backgroundColor: '#E5E7EB' }} resizeMode="cover" />
+            </View>
+            {item.aadhar_back_image && (
+              <View>
+                <Text style={{ fontSize: 10, color: '#6B7280', marginBottom: 2 }}>Aadhaar Back</Text>
+                <Image source={{ uri: item.aadhar_back_image }} style={{ width: 65, height: 45, borderRadius: 6, backgroundColor: '#E5E7EB' }} resizeMode="cover" />
+              </View>
+            )}
+          </View>
+        )}
       </View>
-      <View style={styles.tenantInfo}>
-        <Text style={styles.tenantName}>{item.name}</Text>
-        <Text style={styles.tenantDetail}>{item.type} • Room {item.roomno || item.flatno || item.sectionNo}</Text>
-      </View>
+
       <TouchableOpacity
-        style={styles.callButton}
+        style={[styles.callButton, { alignSelf: 'flex-start', marginTop: 4 }]}
         onPress={() => {
           const phone = item.phone || item.mobile || item.contact;
           if (phone) {
@@ -84,7 +211,7 @@ export default function OwnerTenantsScreen({ navigation }) {
       >
         <Ionicons name="call" size={20} color="#7A3FC4" />
       </TouchableOpacity>
-    </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -116,6 +243,164 @@ export default function OwnerTenantsScreen({ navigation }) {
           }
         />
       )}
+
+      {/* --- TENANT VERIFICATION DETAILS MODAL --- */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={detailsModalVisible}
+        onRequestClose={() => setDetailsModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Tenant Verification details</Text>
+              <TouchableOpacity onPress={() => setDetailsModalVisible(false)} style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={28} color="#1F2937" />
+              </TouchableOpacity>
+            </View>
+
+            {fetchingDetails ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#7A3FC4" />
+                <Text style={{ marginTop: 10, color: '#6B7280' }}>Fetching proof documents...</Text>
+              </View>
+            ) : selectedTenantDetails ? (
+              <ScrollView 
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.modalScrollContent}
+              >
+                {/* Profile Card */}
+                <View style={styles.detailCard}>
+                  <Text style={styles.detailCardTitle}>Profile Details</Text>
+                  
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Name:</Text>
+                    <Text style={styles.infoValue}>{selectedTenantDetails.name}</Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Phone:</Text>
+                    <Text style={styles.infoValue}>{selectedTenantDetails.phone}</Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Property Name:</Text>
+                    <Text style={styles.infoValue}>{selectedTenantDetails.property_name}</Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Allotted Space:</Text>
+                    <Text style={styles.infoValue}>
+                      {selectedTenantDetails.property_type} • Room {selectedTenantDetails.room_number} (Floor {selectedTenantDetails.floor_number})
+                    </Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Monthly Rent:</Text>
+                    <Text style={styles.infoValue}>₹{selectedTenantDetails.rent}</Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Move-In Date:</Text>
+                    <Text style={styles.infoValue}>{selectedTenantDetails.check_in}</Text>
+                  </View>
+                </View>
+
+                {/* Aadhaar Verification Section */}
+                <View style={styles.detailCard}>
+                  <Text style={styles.detailCardTitle}>Identity Verification (Aadhaar)</Text>
+                  
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Aadhaar ID:</Text>
+                    <Text style={styles.infoValue}>{selectedTenantDetails.aadhar_id}</Text>
+                  </View>
+
+                  {/* Aadhaar Front Proof */}
+                  {selectedTenantDetails.aadhar_image ? (
+                    <View style={styles.imageDocWrapper}>
+                      <Text style={styles.imageDocTitle}>Aadhaar Front Image:</Text>
+                      <Image 
+                        source={{ uri: selectedTenantDetails.aadhar_image }} 
+                        style={styles.docImagePreview}
+                        resizeMode="contain"
+                      />
+                    </View>
+                  ) : null}
+
+                  {/* Aadhaar Back Proof */}
+                  {selectedTenantDetails.aadhar_back_image ? (
+                    <View style={styles.imageDocWrapper}>
+                      <Text style={styles.imageDocTitle}>Aadhaar Back Image:</Text>
+                      <Image 
+                        source={{ uri: selectedTenantDetails.aadhar_back_image }} 
+                        style={styles.docImagePreview}
+                        resizeMode="contain"
+                      />
+                    </View>
+                  ) : null}
+                </View>
+
+                {/* Deposit Payment & Selfie Section */}
+                <View style={styles.detailCard}>
+                  <Text style={styles.detailCardTitle}>Payment & Live Selfie</Text>
+
+                  {/* Payment Screenshot */}
+                  {selectedTenantDetails.payment_screenshot ? (
+                    <View style={styles.imageDocWrapper}>
+                      <Text style={styles.imageDocTitle}>Advance / Deposit Payment Screenshot:</Text>
+                      <Image 
+                        source={{ uri: selectedTenantDetails.payment_screenshot }} 
+                        style={styles.docImagePreview}
+                        resizeMode="contain"
+                      />
+                    </View>
+                  ) : null}
+
+                  {/* Selfie Proof */}
+                  {selectedTenantDetails.selfie ? (
+                    <View style={styles.imageDocWrapper}>
+                      <Text style={styles.imageDocTitle}>Tenant Selfie / Live Photo:</Text>
+                      <Image 
+                        source={{ uri: selectedTenantDetails.selfie }} 
+                        style={styles.selfieImagePreview}
+                        resizeMode="contain"
+                      />
+                    </View>
+                  ) : null}
+                </View>
+
+                {/* Action Buttons */}
+                <View style={{ gap: 12, marginTop: 10 }}>
+                  <TouchableOpacity
+                    style={[styles.primaryButton, { backgroundColor: '#7A3FC4' }]}
+                    onPress={() => {
+                      const phone = selectedTenantDetails.phone;
+                      Linking.openURL(`tel:${phone}`);
+                    }}
+                  >
+                    <Ionicons name="call" size={20} color="#FFF" style={{ marginRight: 8 }} />
+                    <Text style={styles.buttonText}>Call Tenant</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.primaryButton, { backgroundColor: '#EF4444' }]}
+                    onPress={handleVacateTenant}
+                  >
+                    <Ionicons name="exit-outline" size={20} color="#FFF" style={{ marginRight: 8 }} />
+                    <Text style={styles.buttonText}>Vacate Tenant</Text>
+                  </TouchableOpacity>
+                </View>
+
+              </ScrollView>
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>Failed to load tenant details.</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -176,14 +461,14 @@ const styles = StyleSheet.create({
   },
   tenantInfo: {
     flex: 1,
-    marginRight: 25, // Prevent overlap with call button
+    marginRight: 25,
     justifyContent: 'center',
   },
   tenantName: {
     fontSize: 16,
     fontWeight: '700',
     color: '#1F2937',
-    marginBottom: 4, // Add spacing between name and detail
+    marginBottom: 4,
     lineHeight: 22,
   },
   tenantDetail: {
@@ -200,6 +485,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    minHeight: 200,
   },
   emptyContainer: {
     flex: 1,
@@ -212,6 +498,106 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#9CA3AF',
   },
+  
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 20,
+    height: '85%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1F2937',
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  modalScrollContent: {
+    paddingBottom: 40,
+  },
+  detailCard: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  detailCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    paddingBottom: 6,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  infoLabel: {
+    fontSize: 14,
+    color: '#4B5563',
+    fontWeight: '500',
+  },
+  infoValue: {
+    fontSize: 14,
+    color: '#1F2937',
+    fontWeight: '700',
+    flex: 1,
+    textAlign: 'right',
+    paddingLeft: 20,
+  },
+  imageDocWrapper: {
+    marginTop: 14,
+  },
+  imageDocTitle: {
+    fontSize: 13,
+    color: '#4B5563',
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  docImagePreview: {
+    width: '100%',
+    height: 180,
+    borderRadius: 12,
+    backgroundColor: '#E5E7EB',
+  },
+  selfieImagePreview: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: '#E5E7EB',
+    alignSelf: 'center',
+    marginTop: 10,
+  },
+  primaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 52,
+    borderRadius: 16,
+    marginTop: 8,
+  },
+  buttonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
 });
-
-
