@@ -1607,7 +1607,7 @@ def tenantdetails(request, phone):
                     rent = str(comm_bed.rent)
         
         # Fallback to completed JoinRequest allotment room/flat/section info if not formally registered in beds table
-        if room_no == "N/A":
+        if room_no == "N/A" and not tenant.is_vacant:
             jr = JoinRequest.objects.filter(tenant=tenant, status='completed').order_by('-created_at').first()
             if jr:
                 room_no = jr.sharing or jr.flat or jr.section or "N/A"
@@ -3663,10 +3663,10 @@ def get_owner_payments(request, phone):
     Fetch all payments and active tenants for an owner.
     """
     try:
-        owner = Owners.objects.filter(owner_id=phone).first()
+        owner = Owners.objects.filter(Q(owner_id=phone) | Q(phone=phone)).first()
         if owner:
             payments = list(Payment.objects.filter(
-                owner_phone__iexact=owner.owner_id
+                Q(owner_phone__iexact=owner.owner_id) | Q(owner_phone__iexact=owner.phone)
             ).order_by('-created_at'))
         else:
             payments = list(Payment.objects.filter(owner_phone__iexact=phone).order_by('-created_at'))
@@ -3752,7 +3752,12 @@ def get_owner_payments(request, phone):
                
             screenshot_url = None
             for table in [TenantBeds, ApartmentTenantBeds, CommercialTenantBeds]:
-                record = table.objects.filter(phone__iexact=tenant_phone, owner_phone__iexact=phone).order_by('-id').first()
+                owner_val = owner.owner_id if owner else phone
+                owner_phone_val = owner.phone if owner else phone
+                record = table.objects.filter(
+                    Q(phone__iexact=tenant_phone),
+                    Q(owner_phone__iexact=owner_val) | Q(owner_phone__iexact=owner_phone_val)
+                ).order_by('-id').first()
                 if record and record.payment_screenshot:
                     try:
                         screenshot_url = request.build_absolute_uri(record.payment_screenshot.url)

@@ -950,7 +950,7 @@ export default function TenantHomeScreen({ route }) {
               {/* HOSTEL */}
               <TouchableOpacity
                 style={[homeStyles.customCard, { backgroundColor: "#7c3aed" }]}
-                onPress={() => navigation.navigate("HostelScreen")}
+                onPress={() => setSelectedType("Hostel")}
               >
                 <Image
                   source={require("../../../assets/images/hostelLogo.png")}
@@ -968,7 +968,7 @@ export default function TenantHomeScreen({ route }) {
               {/* APARTMENT */}
               <TouchableOpacity
                 style={[homeStyles.customCard, { backgroundColor: "#60a5fa" }]}
-                onPress={() => navigation.navigate("ApartmentScreen")}
+                onPress={() => setSelectedType("Apartment")}
               >
                 <Image
                   source={require("../../../assets/images/apartmentLogo.png")}
@@ -986,7 +986,7 @@ export default function TenantHomeScreen({ route }) {
               {/* COMMERCIAL */}
               <TouchableOpacity
                 style={[homeStyles.customCard, { backgroundColor: "#fb923c" }]}
-                onPress={() => navigation.navigate("CommercialScreen")}
+                onPress={() => setSelectedType("Commercial")}
               >
                 <Image
                   source={require("../../../assets/images/commercialLogo.png")}
@@ -1808,11 +1808,17 @@ export function PropertyDetailsScreen(props) {
 
   const performWithdraw = async () => {
     try {
+      const activePhone = await AsyncStorage.getItem("tenantPhone");
+      if (!activePhone) {
+        alert("Tenant phone missing. Please login again.");
+        return;
+      }
+      
       const normalize = (str) => (str || "").replace(/\s+/g, '').toLowerCase();
       console.log("--- WITHDRAW ACTION START ---");
       console.log("Property Name:", property.name);
       console.log("Owner Email:", property.contact);
-      console.log("Tenant Phone:", tenantPhone);
+      console.log("Tenant Phone:", activePhone);
 
       // Optimistic update for immediate feedback in the list
       if (setRequests) {
@@ -1840,7 +1846,7 @@ export function PropertyDetailsScreen(props) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tenant_phone: tenantPhone,
+          tenant_phone: activePhone,
           owner_id: property.owner_id || "",
           owner_phone: property.contact,
           property_name: property.name,

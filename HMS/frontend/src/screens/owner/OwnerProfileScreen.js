@@ -350,11 +350,25 @@ export default function OwnerProfile({ navigation }) {
     setRefreshing(false);
   }, []);
 
+  const resolveOwnerPhone = async () => {
+    let storedId = await AsyncStorage.getItem('ownerPhone');
+    if (!storedId) return null;
+    let phoneToUse = storedId.trim();
+    const rawAccounts = await AsyncStorage.getItem('loggedInOwnerAccounts');
+    if (rawAccounts) {
+      const accounts = JSON.parse(rawAccounts);
+      const account = accounts.find(a => String(a.id) === String(storedId) || String(a.phone) === String(storedId));
+      if (account && account.phone) {
+        phoneToUse = account.phone;
+      }
+    }
+    return phoneToUse;
+  };
+
   const fetchOwnerProfile = async () => {
     try {
-      const rawEmail = await AsyncStorage.getItem("ownerPhone");
-      if (!rawEmail) return;
-      const phone = rawEmail.trim();
+      const phone = await resolveOwnerPhone();
+      if (!phone) return;
       const response = await fetchWithAuth(`${BASE_URL}/api/owner_data/${encodeURIComponent(phone)}/`);
       const data = await response.json();
       if (response.ok) {
@@ -384,9 +398,8 @@ export default function OwnerProfile({ navigation }) {
 
   const fetchPayments = async () => {
     try {
-      const rawEmail = await AsyncStorage.getItem("ownerPhone");
-      if (!rawEmail) return;
-      const phone = rawEmail.trim();
+      const phone = await resolveOwnerPhone();
+      if (!phone) return;
       const response = await fetchWithAuth(`${BASE_URL}/api/owner-payments/${encodeURIComponent(phone)}/`);
       const data = await response.json();
       if (response.ok) {
@@ -400,9 +413,8 @@ export default function OwnerProfile({ navigation }) {
 
   const fetchExpenses = async () => {
     try {
-      const rawEmail = await AsyncStorage.getItem("ownerPhone");
-      if (!rawEmail) return;
-      const phone = rawEmail.trim();
+      const phone = await resolveOwnerPhone();
+      if (!phone) return;
       const response = await fetchWithAuth(`${BASE_URL}/api/owner-expenses/${encodeURIComponent(phone)}/`);
       const data = await response.json();
       if (response.ok) {
@@ -441,9 +453,8 @@ export default function OwnerProfile({ navigation }) {
 
   const uploadProfileImage = async (uri) => {
     try {
-      const rawEmail = await AsyncStorage.getItem("ownerPhone");
-      if (!rawEmail) return;
-      const phone = rawEmail.trim();
+      const phone = await resolveOwnerPhone();
+      if (!phone) return;
 
       const formData = new FormData();
       const filename = uri.split("/").pop();

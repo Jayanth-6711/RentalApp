@@ -32,30 +32,32 @@ export default function OwnerPaymentHistoryScreen({ route, navigation }) {
                 return;
             }
 
-            const response = await fetchWithAuth(`${BASE_URL}/api/owner-payments/${encodeURIComponent(ownerPhone)}/`);
+            let phoneToUse = ownerPhone.trim();
+            const rawAccounts = await AsyncStorage.getItem('loggedInOwnerAccounts');
+            if (rawAccounts) {
+                const accounts = JSON.parse(rawAccounts);
+                const account = accounts.find(a => String(a.id) === String(ownerPhone) || String(a.phone) === String(ownerPhone));
+                if (account && account.phone) {
+                    phoneToUse = account.phone;
+                }
+            }
+
+            const response = await fetchWithAuth(`${BASE_URL}/api/owner-payments/${encodeURIComponent(phoneToUse)}/`);
             const data = await response.json();
 
-            if (Array.isArray(data)) {
+            const paymentsArray = Array.isArray(data) ? data : (data.data || []);
+
+            if (paymentsArray.length >= 0) {
                 // Filter out synthetic 'not yet paid' records (txn_ref starts with PEND- without screenshot usually)
                 // We want to show all real payment attempts (Success, Paid, Pending Verification, Cash, etc)
-                const historyPayments = data.filter(p => {
+                const historyPayments = paymentsArray.filter(p => {
                     if (p.txn_ref && String(p.txn_ref).startsWith('PEND-') && !p.payment_screenshot) {
                         return false;
                     }
                     return true;
                 });
 
-                // Filter payments to double-ensure only the current calendar month is displayed/reported
-                const currentYear = new Date().getFullYear();
-                const currentMonth = new Date().getMonth();
-
-                const currentMonthPayments = historyPayments.filter(p => {
-                    if (!p.created_at) return false;
-                    const pDate = new Date(p.created_at);
-                    return pDate.getFullYear() === currentYear && pDate.getMonth() === currentMonth;
-                });
-
-                setPayments(currentMonthPayments);
+                setPayments(historyPayments);
             }
         } catch (error) {
             console.error('Fetch payment history error:', error);
@@ -94,7 +96,7 @@ export default function OwnerPaymentHistoryScreen({ route, navigation }) {
                     </style>
                 </head>
                 <body>
-                    <h1>Payment Report - ${currentMonthName} ${new Date().getFullYear()}</h1>
+                    <h1>Payment Report</h1>
                     <table>
                         <tr>
                             <th>Tenant Name</th>
@@ -146,7 +148,7 @@ export default function OwnerPaymentHistoryScreen({ route, navigation }) {
             if (isAvailable) {
                 await Sharing.shareAsync(uri, {
                     mimeType: 'application/pdf',
-                    dialogTitle: `Save Payment Report for ${currentMonthName}`,
+                    dialogTitle: `Save Payment Report`,
                     UTI: 'com.adobe.pdf'
                 });
             } else {
@@ -233,7 +235,7 @@ export default function OwnerPaymentHistoryScreen({ route, navigation }) {
             <View style={styles.monthBanner}>
                 <Ionicons name="information-circle-outline" size={18} color="#4F46E5" />
                 <Text style={styles.monthBannerText}>
-                    Showing history for {currentMonthName} {currentYear}
+                    Showing all payment history
                 </Text>
             </View>
 

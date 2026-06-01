@@ -68,23 +68,41 @@ const { width } = Dimensions.get('window');
 const TenantPaymentScreen = () => {
   const { t } = useLanguage();
 
+  const PAYMENT_APP_ASSETS = {
+    'Google Pay': { uri: 'https://cdn-icons-png.flaticon.com/512/6124/6124998.png' },
+    'Paytm': { uri: 'https://cdn-icons-png.flaticon.com/512/825/825454.png' },
+    'PhonePe': { uri: 'https://download.logo.wine/logo/PhonePe/PhonePe-Logo.wine.png' },
+    'BHIM': { uri: 'https://cdn.iconscout.com/icon/free/png-256/free-bhim-logo-icon-download-in-svg-png-gif-file-formats--payment-app-indian-national-corporation-logos-icons-1747945.png' },
+    'PayPal': { uri: 'https://cdn-icons-png.flaticon.com/512/174/174861.png' },
+    'Amazon Pay': { uri: 'https://cdn-icons-png.flaticon.com/512/5968/5968144.png' },
+    'Apple Pay': { uri: 'https://img.icons8.com/ios-filled/512/apple-pay.png' },
+    'WhatsApp Pay': { uri: 'https://cdn-icons-png.flaticon.com/512/733/733585.png' }
+  };
+
   const upiProviders = [
     {
-      name: 'PhonePe',
-      logo: 'https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/phonepe-icon.svg',
-      bgColor: '#F3E8FF'
-    },
-    {
-      name: 'GPay',
-      logo: 'https://cdn-icons-png.flaticon.com/512/6124/6124998.png',
+      name: 'Google Pay',
       bgColor: '#DBEAFE'
     },
     {
       name: 'Paytm',
-      logo: 'https://cdn-icons-png.flaticon.com/512/825/825454.png',
       bgColor: '#E0F2FE'
     },
+    {
+      name: 'PhonePe',
+      bgColor: '#F3E8FF'
+    }
   ];
+
+  const [showMoreAppsModal, setShowMoreAppsModal] = useState(false);
+  const [selectedPaymentApp, setSelectedPaymentApp] = useState(null);
+  const [additionalUPIApps, setAdditionalUPIApps] = useState([
+    { name: 'Apple Pay', bgColor: '#F1F5F9' },
+    { name: 'BHIM', bgColor: '#FFF3E0' },
+    { name: 'PayPal', bgColor: '#E3F2FD' },
+    { name: 'Amazon Pay', bgColor: '#FFF8E1' },
+    { name: 'WhatsApp Pay', bgColor: '#E8F5E9' }
+  ]);
 
   // State
   const [loading, setLoading] = useState(true);
@@ -297,8 +315,9 @@ const TenantPaymentScreen = () => {
     const upiUrl = `upi://pay?pa=${paymentData.upiId}&pn=${encodeURIComponent(name)}&am=${amount}&cu=INR&tn=${encodeURIComponent(note)}`;
     const schemes = {
       'PhonePe': `phonepe://pay?pa=${paymentData.upiId}&pn=${encodeURIComponent(name)}&am=${amount}&cu=INR&tn=${encodeURIComponent(note)}`,
-      'GPay': `tez://upi/pay?pa=${paymentData.upiId}&pn=${encodeURIComponent(name)}&am=${amount}&cu=INR&tn=${encodeURIComponent(note)}`,
+      'Google Pay': `tez://upi/pay?pa=${paymentData.upiId}&pn=${encodeURIComponent(name)}&am=${amount}&cu=INR&tn=${encodeURIComponent(note)}`,
       'Paytm': `paytmmp://pay?pa=${paymentData.upiId}&pn=${encodeURIComponent(name)}&am=${amount}&cu=INR&tn=${encodeURIComponent(note)}`,
+      'BHIM': `bhim://pay?pa=${paymentData.upiId}&pn=${encodeURIComponent(name)}&am=${amount}&cu=INR&tn=${encodeURIComponent(note)}`,
     };
     const targetUrl = schemes[app] || upiUrl;
     Linking.openURL(targetUrl).catch(() => Linking.openURL(upiUrl));
@@ -677,17 +696,33 @@ const TenantPaymentScreen = () => {
                     onPress={() => handleUPIPayment(app.name)}
                   >
                     <View style={[styles.upiIconBox, { backgroundColor: app.bgColor, borderColor: app.name === 'Paytm' ? '#F1F5F9' : '#4F46E5' }]}>
-                      <Image
-                        source={{ uri: app.logo }}
-                        style={styles.upiLogo}
-                        resizeMode="contain"
-                      />
+                      {PAYMENT_APP_ASSETS[app.name] ? (
+                        <Image
+                          source={PAYMENT_APP_ASSETS[app.name]}
+                          style={styles.upiLogo}
+                          resizeMode="contain"
+                        />
+                      ) : (
+                        <Ionicons name="card" size={24} color="#64748B" />
+                      )}
                     </View>
-                    <Text style={[styles.upiName, (app.name === 'PhonePe' || app.name === 'GPay') && { color: '#4F46E5' }]}>
+                    <Text style={[styles.upiName, (app.name === 'PhonePe' || app.name === 'Google Pay') && { color: '#4F46E5' }]} numberOfLines={1}>
                       {app.name}
                     </Text>
                   </TouchableOpacity>
                 ))}
+                
+                <TouchableOpacity
+                  style={styles.upiItem}
+                  onPress={() => setShowMoreAppsModal(true)}
+                >
+                  <View style={[styles.upiIconBox, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }]}>
+                    <Ionicons name="ellipsis-horizontal" size={24} color="#64748B" />
+                  </View>
+                  <Text style={[styles.upiName, { color: '#64748B' }]} numberOfLines={1}>
+                    More
+                  </Text>
+                </TouchableOpacity>
               </View>
 
               <Text style={[styles.sectionLabel, { marginTop: 24 }]}>{t("upload payment screenshot") || "Upload Payment Screenshot"}</Text>
@@ -798,6 +833,46 @@ const TenantPaymentScreen = () => {
             <Text style={styles.securityText}>Your data is safe with us</Text>
           </View>
         </View>
+
+        <Modal
+          visible={showMoreAppsModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowMoreAppsModal(false)}
+        >
+          <View style={styles.bottomSheetOverlay}>
+            <View style={styles.bottomSheetContent}>
+              <View style={styles.bottomSheetHeader}>
+                <Text style={styles.bottomSheetTitle}>More Payment Apps</Text>
+                <TouchableOpacity onPress={() => setShowMoreAppsModal(false)}>
+                  <Ionicons name="close-circle" size={28} color="#94A3B8" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {additionalUPIApps.map((app) => (
+                  <TouchableOpacity
+                    key={app.name}
+                    style={styles.bottomSheetAppItem}
+                    onPress={() => {
+                      setShowMoreAppsModal(false);
+                      handleUPIPayment(app.name);
+                    }}
+                  >
+                    <View style={[styles.bottomSheetAppIcon, { backgroundColor: app.bgColor }]}>
+                      {PAYMENT_APP_ASSETS[app.name] ? (
+                        <Image source={PAYMENT_APP_ASSETS[app.name]} style={styles.bottomSheetAppLogo} resizeMode="contain" />
+                      ) : (
+                        <Ionicons name="card" size={24} color="#64748B" />
+                      )}
+                    </View>
+                    <Text style={styles.bottomSheetAppName}>{app.name}</Text>
+                    <Ionicons name="chevron-forward" size={20} color="#CBD5E1" />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
 
       </ScrollView>
 
@@ -1039,11 +1114,11 @@ const styles = StyleSheet.create({
   upiGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
   },
   upiItem: {
     alignItems: 'center',
-    width: '30%',
+    width: '24%',
   },
   upiIconBox: {
     width: 64,
@@ -1069,19 +1144,6 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
   },
-  phonePeIcon: {
-    backgroundColor: '#6739B7',
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  phonePeText: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
   uploadArea: { width: '100%', height: 140, borderRadius: 20, borderWidth: 1, borderColor: '#4F46E5', borderStyle: 'dashed', backgroundColor: '#F5F3FF', justifyContent: 'center', alignItems: 'center', padding: 16 },
   uploadIconCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center', marginBottom: 10, shadowColor: '#4F46E5', shadowOpacity: 0.1, shadowRadius: 10 },
   uploadTitle: { fontSize: 15, fontWeight: 'bold', color: '#4F46E5' },
@@ -1093,14 +1155,6 @@ const styles = StyleSheet.create({
   fileSize: { fontSize: 12, color: '#64748B', marginTop: 2 },
   sendBtn: { backgroundColor: '#4F46E5', flexDirection: 'row', height: 58, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginTop: 24, shadowColor: '#4F46E5', shadowOpacity: 0.3, shadowRadius: 12, elevation: 4 },
   sendBtnText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
-  cashContent: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
-  cashIllustration: { width: 100, height: 100, backgroundColor: '#F0FDF4', borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginRight: 20 },
-  checkBadge: { position: 'absolute', bottom: 12, right: 12, width: 28, height: 28, borderRadius: 14, backgroundColor: '#22C55E', borderWidth: 2, borderColor: '#FFF', justifyContent: 'center', alignItems: 'center' },
-  cashTextContainer: { flex: 1 },
-  cashTitle: { fontSize: 18, fontWeight: 'bold', color: '#1E293B', marginBottom: 6 },
-  cashDesc: { fontSize: 13, color: '#64748B', lineHeight: 20, marginBottom: 16 },
-  confirmCashBtn: { backgroundColor: '#22C55E', flexDirection: 'row', paddingVertical: 12, paddingHorizontal: 16, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  confirmCashText: { color: '#FFF', fontSize: 14, fontWeight: 'bold' },
   footerNote: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 24, marginHorizontal: 16, backgroundColor: '#FFF', borderRadius: 16, marginTop: 24 },
   securityItem: { flexDirection: 'row', alignItems: 'center' },
   securityText: { fontSize: 11, color: '#64748B', marginLeft: 6, fontWeight: '600' },
@@ -1140,7 +1194,6 @@ const styles = StyleSheet.create({
   copyIconBtnActive: { backgroundColor: '#22C55E' },
   digitalInputWrapper: { marginBottom: 16 },
   digitalNoteInput: { backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, fontSize: 14, color: '#1E293B', borderWidth: 1, borderColor: '#E2E8F0', height: 48 },
-  headerActions: { flexDirection: 'row', alignItems: 'center' },
   issueModalContent: { width: width * 0.85, backgroundColor: '#FFF', borderRadius: 32, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.2, shadowRadius: 24, elevation: 20 },
   issueHeaderGradient: { padding: 32, alignItems: 'center', gap: 12 },
   issueModalTitle: { fontSize: 22, fontWeight: 'bold', color: '#FFF' },
@@ -1155,67 +1208,53 @@ const styles = StyleSheet.create({
   issueDetailsText: { fontSize: 14, color: '#991B1B', lineHeight: 20 },
   issueCloseBtn: { backgroundColor: '#EF4444', paddingVertical: 16, borderRadius: 16, alignItems: 'center' },
   issueCloseBtnText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
-  actionRequestCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
-    marginHorizontal: 16,
-    padding: 16,
-    borderRadius: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-  },
-  actionIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-    position: 'relative',
-  },
-  actionBadge: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#EF4444',
-    borderWidth: 2,
-    borderColor: '#FFF',
-  },
-  actionTextContent: {
+  bottomSheetOverlay: {
     flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
   },
-  actionTitle: {
-    fontSize: 15,
+  bottomSheetContent: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    maxHeight: '60%',
+  },
+  bottomSheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  bottomSheetTitle: {
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#1E293B',
   },
-  actionSubtitle: {
-    fontSize: 13,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  actionButton: {
+  bottomSheetAppItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EEF2FF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
-  actionButtonText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#6366F1',
-    marginRight: 4,
+  bottomSheetAppIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  bottomSheetAppLogo: {
+    width: 24,
+    height: 24,
+  },
+  bottomSheetAppName: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#334155',
   },
 });
 
