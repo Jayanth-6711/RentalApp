@@ -160,8 +160,8 @@ export const BookingProvider = ({ children }) => {
             if (msgType === "status_update" || msgType === "incoming_request" || msgType === "ISSUE" || msgType === "PAYMENT" || msgType === "PAYMENT_VERIFIED") {
               playSound();
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert("New Notification \uD83D\uDD14", msgText);
             }
-            Alert.alert("New Notification \uD83D\uDD14", msgText);
           }
 
         } catch (err) {

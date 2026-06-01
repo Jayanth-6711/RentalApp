@@ -76,7 +76,7 @@ export default function WaitingScreen({ navigation, route }) {
       }
       if (data.owner_id) {
         await AsyncStorage.setItem("ownerPhone", data.owner_id);
-        
+
         // Add to loggedInOwnerAccounts
         const raw = await AsyncStorage.getItem("loggedInOwnerAccounts");
         let accounts = raw ? JSON.parse(raw) : [];
@@ -84,13 +84,13 @@ export default function WaitingScreen({ navigation, route }) {
           accounts.push({ phone: data.owner_phone, name: data.owner_name || "" });
           await AsyncStorage.setItem("loggedInOwnerAccounts", JSON.stringify(accounts));
         }
-        
+
         navigation.reset({
           index: 0,
           routes: [{ name: "OwnerNavigation", params: { phone: data.owner_id } }],
         });
       } else {
-        navigation.replace("OwnerLoginScreen");
+        navigation.replace("OwnerNavigation");
       }
     } catch (e) {
       console.log("Error during auto-login navigation:", e);
@@ -176,11 +176,11 @@ export default function WaitingScreen({ navigation, route }) {
           if (msg.status === "active") {
             setStatus("active");
             showBanner(t("approved_msg") || "🎉 Your account has been Approved!", "#10b981");
-            
+
             // Fetch status via REST to get token & owner ID
             const freshRes = await fetchWithAuth(`${BASE_URL}/api/check-owner-status/${encodeURIComponent(phone)}/`);
             const freshData = freshRes.ok ? await freshRes.json() : {};
-            
+
             setTimeout(async () => {
               await handleActiveApproval(freshData);
             }, 2000);

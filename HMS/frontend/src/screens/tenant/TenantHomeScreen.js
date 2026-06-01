@@ -1913,19 +1913,19 @@ export function PropertyDetailsScreen(props) {
               {requestStatus === "accepted" ? `Welcome to ${property.name}` : property.name}
             </Text>
             <View style={[
-              styles.statusBadge, 
+              styles.statusBadge,
               (requestStatus === "accepted" || requestStatus === "completed" || requestStatus === "allotted") && { backgroundColor: "#2ecc71" },
               requestStatus === "pending" && { backgroundColor: "#f39c12" },
               requestStatus === "rejected" && { backgroundColor: "#e74c3c" }
             ]}>
               <Text style={[
-                styles.statusText, 
+                styles.statusText,
                 (requestStatus === "accepted" || requestStatus === "completed" || requestStatus === "allotted" || requestStatus === "pending" || requestStatus === "rejected") && { color: "#fff" }
               ]}>
-                {requestStatus === "accepted" || requestStatus === "completed" || requestStatus === "allotted" ? "Joined" : 
-                 requestStatus === "pending" ? "Pending" :
-                 requestStatus === "rejected" ? "Rejected" :
-                 (property.isAvailable ? "Vacant" : "Full")}
+                {requestStatus === "accepted" || requestStatus === "completed" || requestStatus === "allotted" ? "Joined" :
+                  requestStatus === "pending" ? "Pending" :
+                    requestStatus === "rejected" ? "Rejected" :
+                      (property.isAvailable ? "Vacant" : "Full")}
               </Text>
             </View>
           </View>
@@ -2341,9 +2341,9 @@ export function PropertyDetailsScreen(props) {
                     </Text>
                   </TouchableOpacity>
 
-                  {/* BACHELOR BUTTON (Disabled if FamilyOnly) */}
+                  {/* BACHELOR BUTTON */}
                   <TouchableOpacity
-                    disabled={property.allowedTenants === "FamilyOnly"}
+
                     style={[
                       styles.tenantBtn,
                       tenantType === "Bachelor" && styles.activeTenantBtn,
@@ -2506,8 +2506,8 @@ export function PropertyDetailsScreen(props) {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Identity Verification</Text>
-              <TouchableOpacity 
-                disabled={uploading} 
+              <TouchableOpacity
+                disabled={uploading}
                 onPress={() => setShowIdModal(false)}
                 style={styles.modalCloseBtn}
               >
@@ -2515,7 +2515,7 @@ export function PropertyDetailsScreen(props) {
               </TouchableOpacity>
             </View>
 
-            <ScrollView 
+            <ScrollView
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.modalScrollContent}
             >
@@ -2561,8 +2561,8 @@ export function PropertyDetailsScreen(props) {
                       </Text>
                       <Text style={styles.fileSize}>Image selected</Text>
                     </View>
-                    <TouchableOpacity 
-                      style={styles.deleteFileBtn} 
+                    <TouchableOpacity
+                      style={styles.deleteFileBtn}
                       disabled={uploading}
                       onPress={() => setSelectedFile(null)}
                     >
@@ -2597,8 +2597,8 @@ export function PropertyDetailsScreen(props) {
                       </Text>
                       <Text style={styles.fileSize}>Image selected</Text>
                     </View>
-                    <TouchableOpacity 
-                      style={styles.deleteFileBtn} 
+                    <TouchableOpacity
+                      style={styles.deleteFileBtn}
                       disabled={uploading}
                       onPress={() => setSelectedBackFile(null)}
                     >
@@ -2633,7 +2633,7 @@ export function PropertyDetailsScreen(props) {
               <TouchableOpacity
                 disabled={!selectedFile || !selectedBackFile || !aadharId || uploading}
                 style={[
-                  styles.modalActionBtn, 
+                  styles.modalActionBtn,
                   styles.submitBtn,
                   (!selectedFile || !selectedBackFile || !aadharId || uploading) && styles.submitBtnDisabled
                 ]}

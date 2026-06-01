@@ -2168,18 +2168,6 @@ export default function BuildingScreen({ route }) {
                         />
                       </View>
                     </View>
-                    <View style={[styles.inputGroup, styles.flex1]}>
-                      <Text style={styles.inputLabel}>Check-out Date</Text>
-                      <View style={styles.inputWrapper}>
-                        <Ionicons name="calendar-outline" size={20} color={COLORS.PRIMARY} style={styles.inputIcon} />
-                        <TextInput
-                          value={checkOut}
-                          onChangeText={(t) => setCheckOut(t.replace(/[^\d/-]/g, ""))}
-                          style={styles.modernInput}
-                          placeholder="Optional"
-                        />
-                      </View>
-                    </View>
                   </View>
 
                   {!hasApp && (

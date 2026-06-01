@@ -67,10 +67,6 @@ export default function OwnerEditTenantScreen({ route, navigation }) {
       Alert.alert("Validation Error", "Check-in date must be in YYYY-MM-DD format.");
       return;
     }
-    if (checkOut.trim() && !isValidDate(checkOut)) {
-      Alert.alert("Validation Error", "Check-out date must be in YYYY-MM-DD format.");
-      return;
-    }
 
     try {
       setLoading(true);
@@ -95,7 +91,6 @@ export default function OwnerEditTenantScreen({ route, navigation }) {
         phone: phone.trim(),
         rent: Number(rent),
         checkIn: checkIn.trim(),
-        checkOut: checkOut.trim() || null,
       };
 
       if (propertyType === "hostel") {
@@ -278,19 +273,7 @@ export default function OwnerEditTenantScreen({ route, navigation }) {
               </View>
             </View>
 
-            {/* CHECK-OUT */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Check-Out Date (Optional, YYYY-MM-DD)</Text>
-              <View style={styles.inputContainer}>
-                <Ionicons name="calendar-outline" size={18} color="#757575" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="YYYY-MM-DD"
-                  value={checkOut}
-                  onChangeText={setCheckOut}
-                />
-              </View>
-            </View>
+
 
             {/* HOSTEL BED SELECTOR */}
             {stayType?.trim().toLowerCase() === "hostel" && (
