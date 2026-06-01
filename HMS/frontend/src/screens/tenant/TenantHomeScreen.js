@@ -2069,7 +2069,7 @@ export function PropertyDetailsScreen(props) {
           </View>
 
           {/* User Reviews Section */}
-          <View style={[styles.row, { marginTop: 25 }]}>
+          {/* <View style={[styles.row, { marginTop: 25 }]}>
             <Text style={styles.sectionTitle}>User Reviews</Text>
             <View
               style={{ flexDirection: "row", alignItems: "center", gap: 15 }}
@@ -2083,9 +2083,9 @@ export function PropertyDetailsScreen(props) {
                 <Text style={styles.seeAllText}>See all</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </View> */}
 
-          <ScrollView
+          {/* <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             style={styles.reviewScroll}
@@ -2105,7 +2105,7 @@ export function PropertyDetailsScreen(props) {
                 <Text style={styles.reviewDate}>{item.date}</Text>
               </View>
             ))}
-          </ScrollView>
+          </ScrollView> */}
 
           <Text style={styles.sectionTitle}>Location on Map</Text>
           <View style={styles.mapContainer}>

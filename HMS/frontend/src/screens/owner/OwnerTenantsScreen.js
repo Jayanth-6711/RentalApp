@@ -19,8 +19,9 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BASE_URL, { fetchWithAuth } from '../../config/Api';
 
-export default function OwnerTenantsScreen({ navigation }) {
+export default function OwnerTenantsScreen({ navigation, route }) {
   const [loading, setLoading] = useState(true);
+  const [propertyId, setPropertyId] = useState(route?.params?.property_id || null);
   const [tenants, setTenants] = useState([]);
   
   // Details Modal States

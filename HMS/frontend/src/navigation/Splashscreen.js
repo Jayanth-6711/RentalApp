@@ -32,7 +32,7 @@ export default function SplashScreen({ onFinish }) {
 
   useEffect(() => {
     // Logo Animation
-    logoOpacity.value = withTiming(1, { duration: 900 });
+    logoOpacity.value = withTiming(1, { duration: 100 });
 
     logoScale.value = withSpring(1, {
       damping: 6,
@@ -44,7 +44,7 @@ export default function SplashScreen({ onFinish }) {
       1200,
       withRepeat(
         withTiming(-10, {
-          duration: 2000,
+          duration: 1000,
           easing: Easing.inOut(Easing.ease),
         }),
         -1,
@@ -55,13 +55,13 @@ export default function SplashScreen({ onFinish }) {
     // Subtitle animation
     subtitleOpacity.value = withDelay(
       1200,
-      withTiming(1, { duration: 800 })
+      withTiming(1, { duration: 200 })
     );
 
     // Splash exit
     screenOpacity.value = withDelay(
       9000,
-      withTiming(0, { duration: 900 }, (finished) => {
+      withTiming(0, { duration: 200 }, (finished) => {
         if (finished && onFinish) {
           runOnJS(onFinish)();
         }
