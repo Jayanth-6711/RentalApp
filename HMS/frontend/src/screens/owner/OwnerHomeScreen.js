@@ -1,6 +1,7 @@
 
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
 import { BookingContext } from "@/src/context/BookingContext";
 import { useNavigation } from "@react-navigation/native";
@@ -107,6 +108,27 @@ export default function BuildingScreen({ route }) {
   const [tenants, setTenants] = useState({});
   const [idProofFile, setIdProofFile] = useState("");
   const [idProofUri, setIdProofUri] = useState("");
+  const [hasApp, setHasApp] = useState(true);
+  const [aadharId, setAadharId] = useState("");
+  const [aadharProofUri, setAadharProofUri] = useState("");
+  const [touchedAadharId, setTouchedAadharId] = useState(false);
+
+  const pickAadharProof = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission Denied", "We need library permissions to upload Aadhaar proof.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      setAadharProofUri(result.assets[0].uri);
+    }
+  };
+
   const getAbsoluteUri = (uri) => {
     if (!uri) return null;
     if (uri.startsWith("http")) return uri;
@@ -753,6 +775,10 @@ export default function BuildingScreen({ route }) {
       setCheckOut(pendingAllotment.checkOut || "");
       setMonthlyRent("");
       setIdProofUri(pendingAllotment.idUri || "");
+      setHasApp(true);
+      setAadharId("");
+      setAadharProofUri("");
+      setTouchedAadharId(false);
     } else {
       setTenantName("");
       setContactNumber("");
@@ -767,6 +793,10 @@ export default function BuildingScreen({ route }) {
 
       setCheckOut("");
       setIdProofUri("");
+      setHasApp(true);
+      setAadharId("");
+      setAadharProofUri("");
+      setTouchedAadharId(false);
     }
 
     setIdProofFile("");
@@ -784,7 +814,7 @@ export default function BuildingScreen({ route }) {
     mail.trim().length === 0 || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail.trim());
   const isFormValid = () => {
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    return (
+    const baseValid = (
       isValidName(tenantName) &&
       isValidPhone(contactNumber) &&
       monthlyRent.trim().length > 0 &&
@@ -792,6 +822,10 @@ export default function BuildingScreen({ route }) {
       dateRegex.test(checkIn.trim()) &&
       (checkOut.trim().length === 0 || dateRegex.test(checkOut.trim()))
     );
+    if (!hasApp) {
+      return baseValid && /^\d{12}$/.test(aadharId);
+    }
+    return baseValid;
   };
   const addTenant = () => {
     console.log("ADDING TENANT", {
@@ -1018,6 +1052,22 @@ export default function BuildingScreen({ route }) {
 
 
       formData.append("owner_phone", phone);
+
+      if (!hasApp) {
+        formData.append("has_app", "false");
+        formData.append("is_offline", "true");
+        formData.append("aadhar_id", aadharId);
+        if (aadharProofUri) {
+          const filename = aadharProofUri.split('/').pop() || "aadhar_proof.jpg";
+          const match = /\.(\w+)$/.exec(filename);
+          const type = match ? `image/${match[1]}` : `image/jpeg`;
+          formData.append("aadhar_image", {
+            uri: aadharProofUri,
+            name: filename,
+            type: type,
+          });
+        }
+      }
 
       if (idProofUri) {
         formData.append("idUri", {
@@ -1923,6 +1973,44 @@ export default function BuildingScreen({ route }) {
 
                 <View style={{ height: 10 }} />
                 <View style={{ height: 10 }} />
+
+                {/* App Status Selection Selector */}
+                <View style={[styles.formSection, { backgroundColor: "#F9FAFB", paddingVertical: 12 }]}>
+                  <Text style={[styles.inputLabel, { marginBottom: 8, fontSize: 13, fontWeight: "700" }]}>Registration Type</Text>
+                  <View style={{ flexDirection: "row", backgroundColor: "#E5E7EB", borderRadius: 12, padding: 4 }}>
+                    <TouchableOpacity
+                      style={{
+                        flex: 1,
+                        paddingVertical: 10,
+                        backgroundColor: hasApp ? COLORS.PRIMARY : "transparent",
+                        borderRadius: 8,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexDirection: "row"
+                      }}
+                      onPress={() => setHasApp(true)}
+                    >
+                      <Ionicons name="logo-android" size={16} color={hasApp ? COLORS.WHITE : COLORS.TEXT_PRIMARY} style={{ marginRight: 6 }} />
+                      <Text style={{ color: hasApp ? COLORS.WHITE : COLORS.TEXT_PRIMARY, fontWeight: "600", fontSize: 13 }}>Tenant Has App</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{
+                        flex: 1,
+                        paddingVertical: 10,
+                        backgroundColor: !hasApp ? COLORS.PRIMARY : "transparent",
+                        borderRadius: 8,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexDirection: "row"
+                      }}
+                      onPress={() => setHasApp(false)}
+                    >
+                      <Ionicons name="person-remove-outline" size={16} color={!hasApp ? COLORS.WHITE : COLORS.TEXT_PRIMARY} style={{ marginRight: 6 }} />
+                      <Text style={{ color: !hasApp ? COLORS.WHITE : COLORS.TEXT_PRIMARY, fontWeight: "600", fontSize: 13 }}>Tenant Doesn't Have App</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
                 {/* Personal Information Card */}
                 <View style={[styles.formSection, styles.cardPersonal]}>
                   <View style={styles.formSectionTitle}>
@@ -2093,6 +2181,63 @@ export default function BuildingScreen({ route }) {
                       </View>
                     </View>
                   </View>
+
+                  {!hasApp && (
+                    <>
+                      <View style={[styles.inputGroup, { marginTop: 12 }]}>
+                        <Text style={styles.inputLabel}>Aadhaar ID (Required)</Text>
+                        <View style={[styles.inputWrapper, touchedAadharId && !/^\d{12}$/.test(aadharId) && styles.inputErrorBorder]}>
+                          <Ionicons name="card-outline" size={20} color={COLORS.PRIMARY} style={styles.inputIcon} />
+                          <TextInput
+                            value={aadharId}
+                            onChangeText={(t) => setAadharId(t.replace(/[^0-9]/g, "").slice(0, 12))}
+                            onBlur={() => setTouchedAadharId(true)}
+                            style={styles.modernInput}
+                            placeholder="Enter 12 Digit Aadhaar No"
+                            keyboardType="numeric"
+                            maxLength={12}
+                          />
+                        </View>
+                        {touchedAadharId && !/^\d{12}$/.test(aadharId) && (
+                          <Text style={{ color: "red", fontSize: 11, marginTop: 4 }}>Aadhaar ID must be exactly 12 digits</Text>
+                        )}
+                      </View>
+
+                      <View style={[styles.inputGroup, { marginTop: 12 }]}>
+                        <Text style={styles.inputLabel}>Aadhaar Proof Image (Optional)</Text>
+                        <TouchableOpacity
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            backgroundColor: "#F3F4F6",
+                            padding: 12,
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: "#D1D5DB",
+                            borderStyle: "dashed",
+                            justifyContent: "center"
+                          }}
+                          onPress={pickAadharProof}
+                        >
+                          <Ionicons name="cloud-upload-outline" size={22} color={COLORS.PRIMARY} style={{ marginRight: 8 }} />
+                          <Text style={{ color: COLORS.TEXT_PRIMARY, fontWeight: "600" }}>
+                            {aadharProofUri ? "Change Proof Image" : "Upload Aadhaar Front Page"}
+                          </Text>
+                        </TouchableOpacity>
+                        {aadharProofUri ? (
+                          <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center" }}>
+                            <Image source={{ uri: aadharProofUri }} style={{ width: 80, height: 50, borderRadius: 6 }} />
+                            <TouchableOpacity
+                              onPress={() => setAadharProofUri("")}
+                              style={{ marginLeft: 12, backgroundColor: "#FEE2E2", padding: 6, borderRadius: 6 }}
+                            >
+                              <Text style={{ color: "#EF4444", fontSize: 12, fontWeight: "700" }}>Remove</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ) : null}
+                      </View>
+                    </>
+                  )}
 
                 </View>
 

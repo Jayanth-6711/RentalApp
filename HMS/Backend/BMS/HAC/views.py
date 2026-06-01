@@ -833,16 +833,61 @@ def get_properties_listing(request):
  
 
 
+def handle_offline_tenant(data, files, owner):
+    is_offline = data.get('is_offline') == 'true' or data.get('has_app') == 'false'
+    if is_offline:
+        aadhar_id = data.get('aadhar_id')
+        if not aadhar_id:
+            return None, "Aadhaar ID is required for offline tenant."
+        if not aadhar_id.isdigit() or len(aadhar_id) != 12:
+            return None, "Aadhaar ID must be exactly 12 numeric digits."
+        
+        tenant_phone = data.get('phone')
+        if not tenant_phone:
+            return None, "Tenant contact number is required."
+        
+        existing_with_aadhar = Tenent.objects.filter(aadhar_id=aadhar_id).first()
+        if existing_with_aadhar and existing_with_aadhar.phone != tenant_phone:
+            return None, "This Aadhaar ID is already registered to another user."
+        
+        t_obj = Tenent.objects.filter(phone=tenant_phone).first()
+        if t_obj:
+            t_obj.name = data.get('name', t_obj.name)
+            t_obj.aadhar_id = aadhar_id
+            if 'aadhar_image' in files:
+                t_obj.aadhar_image = files['aadhar_image']
+            t_obj.owner = owner
+            t_obj.is_vacant = False
+            t_obj.save()
+        else:
+            t_obj = Tenent.objects.create(
+                name=data.get('name'),
+                phone=tenant_phone,
+                aadhar_id=aadhar_id,
+                aadhar_image=files.get('aadhar_image'),
+                owner=owner,
+                is_vacant=False
+            )
+        return t_obj, None
+    return None, None
+
 @api_view(['POST'])
 @jwt_required()
 def registerbeds(request):
     print(" Incoming Data:", request.data)
     data = request.data.copy()
     owner_phone = data.get('owner_phone')
+    owner = None
     if owner_phone:
         owner = Owners.objects.filter(Q(owner_id=owner_phone) | Q(phone=owner_phone)).order_by('-created_at').first()
         if owner:
             data['owner_phone'] = owner.owner_id
+
+    # Handle offline tenant creation
+    t_obj, err = handle_offline_tenant(data, request.FILES, owner)
+    if err:
+        return Response({"error": err}, status=status.HTTP_400_BAD_REQUEST)
+
     serializer = TenantBedSerializer(data=data)
 
     if serializer.is_valid():
@@ -864,10 +909,17 @@ def registerapartmentbeds(request):
     print(" Incoming Data:", request.data)
     data = request.data.copy()
     owner_phone = data.get('owner_phone')
+    owner = None
     if owner_phone:
         owner = Owners.objects.filter(Q(owner_id=owner_phone) | Q(phone=owner_phone)).order_by('-created_at').first()
         if owner:
             data['owner_phone'] = owner.owner_id
+
+    # Handle offline tenant creation
+    t_obj, err = handle_offline_tenant(data, request.FILES, owner)
+    if err:
+        return Response({"error": err}, status=status.HTTP_400_BAD_REQUEST)
+
     serializer = ApartmentBedSerializer(data=data)
 
     if serializer.is_valid():
@@ -889,10 +941,17 @@ def registercommercialbeds(request):
     print(" Incoming Data:", request.data)
     data = request.data.copy()
     owner_phone = data.get('owner_phone')
+    owner = None
     if owner_phone:
         owner = Owners.objects.filter(Q(owner_id=owner_phone) | Q(phone=owner_phone)).order_by('-created_at').first()
         if owner:
             data['owner_phone'] = owner.owner_id
+
+    # Handle offline tenant creation
+    t_obj, err = handle_offline_tenant(data, request.FILES, owner)
+    if err:
+        return Response({"error": err}, status=status.HTTP_400_BAD_REQUEST)
+
     serializer = CommercialBedSerializer(data=data)
 
     if serializer.is_valid():
@@ -3722,7 +3781,7 @@ def upload_payment_screenshot(request):
        
         if not payment:
             payment = Payment.objects.filter(tenant_phone__iexact=phone, status='PENDING').order_by('-created_at').first()
- 
+
         if not payment:
             # Create a new payment record if one didn't exist
             tenant_obj = Tenent.objects.filter(phone__iexact=phone).first()
@@ -3739,6 +3798,48 @@ def upload_payment_screenshot(request):
                         txn_ref=txn_ref or f"PROOF-{int(timezone.now().timestamp())}",
                         status='PENDING'
                     )
+                else:
+                    # Fallback for offline tenants who don't have JoinRequest
+                    allotment = None
+                    prop_type = None
+                    allotment = TenantBeds.objects.filter(phone__iexact=phone).first()
+                    if allotment:
+                        prop_type = "hostel"
+                    else:
+                        allotment = ApartmentTenantBeds.objects.filter(phone__iexact=phone).first()
+                        if allotment:
+                            prop_type = "apartment"
+                        else:
+                            allotment = CommercialTenantBeds.objects.filter(phone__iexact=phone).first()
+                            if allotment:
+                                prop_type = "commercial"
+                    if allotment:
+                        owner_val = allotment.owner_phone
+                        owner = Owners.objects.filter(Q(owner_id=owner_val) | Q(phone=owner_val)).first()
+                        if owner:
+                            property_name = "Property"
+                            if prop_type == "hostel":
+                                h = StayHostelDetails.objects.filter(owner=owner).first()
+                                if h:
+                                    property_name = h.hostelName
+                            elif prop_type == "apartment":
+                                a = ApartmentStayDetails.objects.filter(owner=owner).first()
+                                if a:
+                                    property_name = a.apartmentName
+                            elif prop_type == "commercial":
+                                c = CommericialDetails.objects.filter(owner=owner).first()
+                                if c:
+                                    property_name = c.commercialName
+                            payment = Payment.objects.create(
+                                tenant_phone=phone,
+                                tenant_name=tenant_obj.name,
+                                owner_phone=owner.owner_id,
+                                owner_name=owner.name,
+                                property_name=property_name,
+                                amount=request.data.get('amount', allotment.rent),
+                                txn_ref=txn_ref or f"PROOF-{int(timezone.now().timestamp())}",
+                                status='PENDING'
+                            )
  
         # 2. Save screenshot to Payment record
         if payment:
