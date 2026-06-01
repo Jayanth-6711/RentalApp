@@ -197,7 +197,7 @@ export default function OwnerNavigation({ route, navigation }) {
           Alert.alert(
             "New Booking Request! \uD83D\uDD14",
             msg.message || "You have a new join request from a tenant.",
-            [{ text: "View Details", onPress: () => navigation.navigate("OwnerNavigation", { screen: "Home" }) }]
+            [{ text: "View Details", onPress: () => navigation.navigate("OwnerNotificationScreen", { phone: activePhone }) }]
           );
         } else if (msg.type === "ISSUE") {
           // Play custom sound and vibrate

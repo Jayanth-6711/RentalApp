@@ -189,48 +189,12 @@ export default function TenantHomeScreen({ route }) {
 
   const [selectedProperty, setSelectedProperty] = useState(null);
   const bookingContext = useContext(BookingContext);
-  const isJoined = bookingContext?.isJoined;
 
   const requests = bookingContext?.requests || [];
   const { tenantEmail, setTenantEmail } = useContext(TenantContext);
   const { setRequests, refreshTrigger } = useContext(BookingContext);
   const navigation = useNavigation();
   const pulseAnim = useRef(new Animated.Value(1)).current;
-
-  const [joinedProperty, setJoinedProperty] = useState(null);
-
-  const fetchJoinedProperty = async () => {
-    try {
-      const tenantPhone = await AsyncStorage.getItem("tenantPhone");
-      if (!tenantPhone) return;
-
-      const res = await fetchWithAuth(`${BASE_URL}/api/tenantdetails/${encodeURIComponent(tenantPhone)}/`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.property_name && data.property_name !== "N/A" && data.status !== "Vacated") {
-          setJoinedProperty({
-            name: data.property_name,
-            location: data.location,
-            cover_image: data.property_cover_image,
-          });
-        } else {
-          setJoinedProperty(null);
-        }
-      } else {
-        setJoinedProperty(null);
-      }
-    } catch (error) {
-      console.log("Error fetching joined property details:", error);
-    }
-  };
-
-  useEffect(() => {
-    if (isJoined) {
-      fetchJoinedProperty();
-    } else {
-      setJoinedProperty(null);
-    }
-  }, [isJoined, refreshTrigger]);
 
   // Rehydrate TenantEmail if empty (e.g. after refresh or app restart)
   useEffect(() => {
@@ -245,6 +209,30 @@ export default function TenantHomeScreen({ route }) {
     };
     checkEmail();
   }, []);
+
+  const [joinedProperty, setJoinedProperty] = useState(null);
+
+  useEffect(() => {
+    const fetchJoinedProperty = async () => {
+      if (bookingContext?.isJoined) {
+        try {
+          const phone = await AsyncStorage.getItem("tenantPhone");
+          if (phone) {
+            const res = await fetchWithAuth(`${BASE_URL}/api/tenantdetails/${encodeURIComponent(phone)}/`);
+            if (res.ok) {
+              const data = await res.json();
+              setJoinedProperty(data);
+            }
+          }
+        } catch (e) {
+          console.log("Error fetching joined property details:", e);
+        }
+      } else {
+        setJoinedProperty(null);
+      }
+    };
+    fetchJoinedProperty();
+  }, [bookingContext?.isJoined, refreshTrigger]);
 
   const newNotifications = requests.filter(
     r =>
@@ -760,81 +748,72 @@ export default function TenantHomeScreen({ route }) {
           stickyHeaderIndices={[1]}
           scrollEventThrottle={16}
         >
-          {joinedProperty ? (
-            <View style={homeStyles.joinedPropertyHeader}>
-              <Image
-                source={
-                  joinedProperty.cover_image
-                    ? { uri: joinedProperty.cover_image }
-                    : require("../../../assets/images/tenantBackground.jpg")
-                }
-                style={homeStyles.joinedPropertyImage}
-                resizeMode="cover"
-              />
-              <LinearGradient
-                colors={["transparent", "rgba(0,0,0,0.85)"]}
-                style={homeStyles.joinedPropertyGradient}
-              >
-                <View style={homeStyles.joinedPropertyTextContainer}>
-                  <Text style={homeStyles.joinedPropertyName}>{joinedProperty.name}</Text>
-                  <View style={homeStyles.joinedPropertyLocationRow}>
-                    <Ionicons name="location" size={16} color="#E5E7EB" style={{ marginRight: 4 }} />
-                    <Text style={homeStyles.joinedPropertyLocation}>{joinedProperty.location}</Text>
-                  </View>
-                </View>
-              </LinearGradient>
-              <View style={homeStyles.joinedPropertyNotificationContainer}>
-                <TouchableOpacity
-                  style={homeStyles.heroIconBtn}
-                  onPress={() => navigation.navigate("TenantNotification")}
-                >
-                  <Ionicons name="notifications-outline" size={24} color="#fff" />
-                  {newNotifications > 0 && (
-                    <View style={homeStyles.heroBadge}>
-                      <Text style={homeStyles.heroBadgeText}>{newNotifications}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
+
+
+          {bookingContext?.isJoined && joinedProperty && joinedProperty.property_name !== "N/A" ? (
             <ImageBackground
-              source={require("../../../assets/images/tenantBackground.jpg")}
-              style={homeStyles.heroSection}
-              imageStyle={homeStyles.heroBgImage}
+              source={
+                joinedProperty.property_image
+                  ? { uri: joinedProperty.property_image }
+                  : require("../../../assets/images/tenantBackground.jpg")
+              }
+              style={homeStyles.joinedHeroSection}
+              imageStyle={homeStyles.joinedHeroBgImage}
             >
-              {/* TOP ROW */}
+              {/* Overlay for readability */}
+              <View style={homeStyles.overlay} />
+
+              {/* TOP ROW WITH NOTIFICATION */}
               <View style={homeStyles.topRow}>
-                <View style={homeStyles.locationWrapper}>
-                  <Ionicons name="location-outline" size={14} color="#fff" />
-                  <Text numberOfLines={1} style={homeStyles.locationText}>
-                    {locationName}
-                  </Text>
+                <View style={homeStyles.joinedStatusBadge}>
+                  <Ionicons name="checkmark-circle" size={14} color="#FFF" />
+                  <Text style={homeStyles.joinedStatusText}>Joined Property</Text>
                 </View>
+
                 <View style={homeStyles.heroIcons}>
                   <TouchableOpacity
                     style={homeStyles.heroIconBtn}
                     onPress={() => navigation.navigate("TenantNotification")}
                   >
-                    <Ionicons name="notifications-outline" size={22} color="#fff" />
+                    <Ionicons
+                      name="notifications-outline"
+                      size={22}
+                      color="#fff"
+                    />
                     {newNotifications > 0 && (
                       <View style={homeStyles.heroBadge}>
-                        <Text style={homeStyles.heroBadgeText}>{newNotifications}</Text>
+                        <Text style={homeStyles.heroBadgeText}>
+                          {newNotifications}
+                        </Text>
                       </View>
                     )}
                   </TouchableOpacity>
                 </View>
               </View>
-              {/* TITLE */}
-              <View style={homeStyles.heroContent}>
-                <Text style={homeStyles.heroTitle}>Find Your{"\n"}Perfect Space</Text>
-                <Text style={homeStyles.heroSubtitle}>
-                  Hostels, Apartments & Commercial spaces near you
+
+              {/* PROPERTY INFORMATION */}
+              <View style={homeStyles.joinedHeroContent}>
+                <Text style={homeStyles.joinedPropertyType}>
+                  {(joinedProperty.property_type || "Joined").toUpperCase()}
                 </Text>
+                <Text style={homeStyles.joinedPropertyName} numberOfLines={1}>
+                  {joinedProperty.property_name}
+                </Text>
+                <View style={homeStyles.joinedLocationWrapper}>
+                  <Ionicons name="location" size={16} color="#FFF" style={{ marginRight: 4 }} />
+                  <Text style={homeStyles.joinedLocationText} numberOfLines={2}>
+                    {joinedProperty.location || "No Address Available"}
+                  </Text>
+                </View>
               </View>
+
               {/* SEARCH */}
               <View style={homeStyles.newSearchBar}>
-                <Ionicons name="search" size={20} color="#999" />
+                <Ionicons
+                  name="search"
+                  size={20}
+                  color="#999"
+                />
                 <TextInput
                   style={homeStyles.newSearchInput}
                   placeholder="Search location, property..."
@@ -846,10 +825,109 @@ export default function TenantHomeScreen({ route }) {
                   autoCorrect={false}
                   autoCapitalize="none"
                 />
-                <TouchableOpacity style={homeStyles.filterBtn} onPress={() => setModalVisible(true)}>
-                  <Ionicons name="options-outline" size={20} color="#6C63FF" />
+                <TouchableOpacity
+                  style={homeStyles.filterBtn}
+                  onPress={() => setModalVisible(true)}
+                >
+                  <Ionicons
+                    name="options-outline"
+                    size={20}
+                    color="#6C63FF"
+                  />
                   <Text style={homeStyles.filterText}>
-                    Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+                    Filters
+                    {activeFilterCount > 0
+                      ? ` (${activeFilterCount})`
+                      : ""}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ImageBackground>
+          ) : (
+            <ImageBackground
+              source={require("../../../assets/images/tenantBackground.jpg")}
+              style={homeStyles.heroSection}
+              imageStyle={homeStyles.heroBgImage}
+            >
+              {/* TOP ROW */}
+              <View style={homeStyles.topRow}>
+                <View style={homeStyles.locationWrapper}>
+                  <Ionicons
+                    name="location-outline"
+                    size={14}
+                    color="#fff"
+                  />
+                  <Text
+                    numberOfLines={1}
+                    style={homeStyles.locationText}
+                  >
+                    {locationName}
+                  </Text>
+                </View>
+
+                <View style={homeStyles.heroIcons}>
+                  <TouchableOpacity
+                    style={homeStyles.heroIconBtn}
+                    onPress={() => navigation.navigate("TenantNotification")}
+                  >
+                    <Ionicons
+                      name="notifications-outline"
+                      size={22}
+                      color="#fff"
+                    />
+                    {newNotifications > 0 && (
+                      <View style={homeStyles.heroBadge}>
+                        <Text style={homeStyles.heroBadgeText}>
+                          {newNotifications}
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* TITLE */}
+              <View style={homeStyles.heroContent}>
+                <Text style={homeStyles.heroTitle}>
+                  Find Your{"\n"}Perfect Space
+                </Text>
+                <Text style={homeStyles.heroSubtitle}>
+                  Hostels, Apartments & Commercial spaces near you
+                </Text>
+              </View>
+
+              {/* SEARCH */}
+              <View style={homeStyles.newSearchBar}>
+                <Ionicons
+                  name="search"
+                  size={20}
+                  color="#999"
+                />
+                <TextInput
+                  style={homeStyles.newSearchInput}
+                  placeholder="Search location, property..."
+                  placeholderTextColor="#999"
+                  value={mainSearch}
+                  onChangeText={(text) => setMainSearch(text)}
+                  returnKeyType="search"
+                  clearButtonMode="while-editing"
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  style={homeStyles.filterBtn}
+                  onPress={() => setModalVisible(true)}
+                >
+                  <Ionicons
+                    name="options-outline"
+                    size={20}
+                    color="#6C63FF"
+                  />
+                  <Text style={homeStyles.filterText}>
+                    Filters
+                    {activeFilterCount > 0
+                      ? ` (${activeFilterCount})`
+                      : ""}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -2719,59 +2797,6 @@ export function PropertyDetailsScreen(props) {
 const isWeb = Platform.OS === "web";
 
 const homeStyles = StyleSheet.create({
-  joinedPropertyHeader: {
-    width: "100%",
-    height: 220,
-    position: "relative",
-    overflow: "hidden",
-  },
-  joinedPropertyImage: {
-    width: "100%",
-    height: "100%",
-  },
-  joinedPropertyGradient: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    top: 0,
-    justifyContent: "flex-end",
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  joinedPropertyTextContainer: {
-    width: "100%",
-  },
-  joinedPropertyName: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#fff",
-    textShadowColor: "rgba(0,0,0,0.6)",
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
-  },
-  joinedPropertyLocationRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 6,
-  },
-  joinedPropertyLocation: {
-    fontSize: 14,
-    color: "#E5E7EB",
-    fontWeight: "500",
-    textShadowColor: "rgba(0,0,0,0.6)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  joinedPropertyNotificationContainer: {
-    position: "absolute",
-    top: 40,
-    right: 20,
-    zIndex: 10,
-    backgroundColor: "rgba(0,0,0,0.3)",
-    padding: 8,
-    borderRadius: 20,
-  },
   locationWrapper: {
     flexDirection: "row",
     alignItems: "center",
@@ -2926,6 +2951,65 @@ const homeStyles = StyleSheet.create({
   heroBgImage: {
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
+  },
+
+  joinedHeroSection: {
+    paddingHorizontal: 20,
+    paddingTop: 50,
+    paddingBottom: 25,
+    overflow: "hidden",
+    minHeight: 310,
+    justifyContent: "space-between",
+  },
+  joinedHeroBgImage: {
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+  },
+  joinedStatusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(108, 99, 255, 0.8)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  joinedStatusText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "700",
+    marginLeft: 4,
+  },
+  joinedHeroContent: {
+    marginTop: 15,
+  },
+  joinedPropertyType: {
+    color: "#DCDDFF",
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 1.5,
+    marginBottom: 4,
+  },
+  joinedPropertyName: {
+    color: "#fff",
+    fontSize: 24,
+    fontWeight: "800",
+    marginBottom: 6,
+  },
+  joinedLocationWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  joinedLocationText: {
+    color: "#f3f4f6",
+    fontSize: 14,
+    fontWeight: "500",
+    flex: 1,
   },
 
   topRow: {

@@ -1478,7 +1478,7 @@ def tenantdetails(request, phone):
         property_name = "N/A"
         property_type = "N/A"
         location = "N/A"
-        cover_image_url = None
+        property_image = None
  
         if tenant.owner and not tenant.is_vacant:
             # Try to get active property from completed JoinRequest first
@@ -1494,7 +1494,7 @@ def tenantdetails(request, phone):
                     property_type = hostel.stayType
                     location = hostel.location
                     if hostel.cover_image:
-                        cover_image_url = request.build_absolute_uri(hostel.cover_image.url)
+                        property_image = request.build_absolute_uri(hostel.cover_image.url)
                     property_found = True
                 else:
                     # Search Apartment
@@ -1504,7 +1504,7 @@ def tenantdetails(request, phone):
                         property_type = apt.stayType
                         location = apt.location
                         if apt.cover_image:
-                            cover_image_url = request.build_absolute_uri(apt.cover_image.url)
+                            property_image = request.build_absolute_uri(apt.cover_image.url)
                         property_found = True
                     else:
                         # Search Commercial
@@ -1514,9 +1514,9 @@ def tenantdetails(request, phone):
                             property_type = comm.stayType
                             location = comm.location
                             if comm.cover_image:
-                                cover_image_url = request.build_absolute_uri(comm.cover_image.url)
+                                property_image = request.build_absolute_uri(comm.cover_image.url)
                             property_found = True
- 
+
             if not property_found:
                 # Fallback to owner's first property if no matching completed JoinRequest found
                 hostel = StayHostelDetails.objects.filter(
@@ -1528,7 +1528,7 @@ def tenantdetails(request, phone):
                     property_type = hostel.stayType
                     location = hostel.location
                     if hostel.cover_image:
-                        cover_image_url = request.build_absolute_uri(hostel.cover_image.url)
+                        property_image = request.build_absolute_uri(hostel.cover_image.url)
       
                 else:
                     # APARTMENT
@@ -1541,7 +1541,7 @@ def tenantdetails(request, phone):
                         property_type = apartment.stayType
                         location = apartment.location
                         if apartment.cover_image:
-                            cover_image_url = request.build_absolute_uri(apartment.cover_image.url)
+                            property_image = request.build_absolute_uri(apartment.cover_image.url)
       
                     else:
                         # COMMERCIAL
@@ -1554,7 +1554,7 @@ def tenantdetails(request, phone):
                             property_type = commercial.stayType
                             location = commercial.location
                             if commercial.cover_image:
-                                cover_image_url = request.build_absolute_uri(commercial.cover_image.url)
+                                property_image = request.build_absolute_uri(commercial.cover_image.url)
  
         # =========================================
         # ROOM / FLOOR DETAILS
@@ -1645,7 +1645,7 @@ def tenantdetails(request, phone):
             "property_name": property_name,
             "property_type": property_type,
             "location": location,
-            "property_cover_image": cover_image_url,
+            "property_image": property_image,
  
             # ROOM
             "room_number": room_no,

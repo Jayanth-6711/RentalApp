@@ -1138,7 +1138,7 @@ export default function BuildingScreen({ route }) {
 
       if (pendingAllotment) {
         setPendingAllotment(null);
-        navigation.navigate("OwnerNotificationScreen", { phone });
+        navigation.navigate("OwnerNavigation", { screen: "Home" });
       }
     } catch (error) {
       console.log("Error saving tenant:", error);
