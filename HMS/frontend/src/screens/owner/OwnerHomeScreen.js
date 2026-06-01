@@ -1990,7 +1990,6 @@ export default function BuildingScreen({ route }) {
                       }}
                       onPress={() => setHasApp(true)}
                     >
-                      <Ionicons name="logo-android" size={16} color={hasApp ? COLORS.WHITE : COLORS.TEXT_PRIMARY} style={{ marginRight: 6 }} />
                       <Text style={{ color: hasApp ? COLORS.WHITE : COLORS.TEXT_PRIMARY, fontWeight: "600", fontSize: 13 }}>Tenant Has App</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -2005,7 +2004,6 @@ export default function BuildingScreen({ route }) {
                       }}
                       onPress={() => setHasApp(false)}
                     >
-                      <Ionicons name="person-remove-outline" size={16} color={!hasApp ? COLORS.WHITE : COLORS.TEXT_PRIMARY} style={{ marginRight: 6 }} />
                       <Text style={{ color: !hasApp ? COLORS.WHITE : COLORS.TEXT_PRIMARY, fontWeight: "600", fontSize: 13 }}>Tenant Doesn't Have App</Text>
                     </TouchableOpacity>
                   </View>
