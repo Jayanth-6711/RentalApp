@@ -163,9 +163,6 @@ const TenantNotificationScreen = () => {
 
       const res = await fetchWithAuth(`${BASE_URL}/api/tenant/submit_verification/`, {
         method: "POST",
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
         body: formData,
       });
 

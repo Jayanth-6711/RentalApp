@@ -139,7 +139,7 @@ export default function OwnerNavigation({ route, navigation }) {
           setHasPendingIssues(issuesData.some(issue => issue.status?.toLowerCase() === 'pending' || issue.status?.toLowerCase() === 'open'));
         }
 
-        const paymentsRes = await fetchWithAuth(`${BASE_URL}/api/owner_payments/${encodeURIComponent(activePhone)}/`);
+        const paymentsRes = await fetchWithAuth(`${BASE_URL}/api/owner-payments/${encodeURIComponent(activePhone)}/`);
         if (paymentsRes.ok) {
           const paymentsData = await paymentsRes.json();
           const payments = paymentsData.payments || (Array.isArray(paymentsData) ? paymentsData : []);

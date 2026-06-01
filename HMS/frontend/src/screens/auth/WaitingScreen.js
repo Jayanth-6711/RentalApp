@@ -69,6 +69,35 @@ export default function WaitingScreen({ navigation, route }) {
 
 
 
+  const handleActiveApproval = async (data) => {
+    try {
+      if (data.token) {
+        await AsyncStorage.setItem("userToken", data.token);
+      }
+      if (data.owner_id) {
+        await AsyncStorage.setItem("ownerPhone", data.owner_id);
+        
+        // Add to loggedInOwnerAccounts
+        const raw = await AsyncStorage.getItem("loggedInOwnerAccounts");
+        let accounts = raw ? JSON.parse(raw) : [];
+        if (!accounts.find(a => a.phone === data.owner_phone)) {
+          accounts.push({ phone: data.owner_phone, name: data.owner_name || "" });
+          await AsyncStorage.setItem("loggedInOwnerAccounts", JSON.stringify(accounts));
+        }
+        
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "OwnerNavigation", params: { phone: data.owner_id } }],
+        });
+      } else {
+        navigation.replace("OwnerLoginScreen");
+      }
+    } catch (e) {
+      console.log("Error during auto-login navigation:", e);
+      navigation.replace("OwnerLoginScreen");
+    }
+  };
+
   const fetchInitialStatus = async () => {
     try {
       if (!isMounted.current || !phone) return;
@@ -90,7 +119,7 @@ export default function WaitingScreen({ navigation, route }) {
           wsRef.current.close();
           wsRef.current = null;
         }
-        navigation.replace("OwnerLoginScreen");
+        await handleActiveApproval(data);
         return;
       }
 
@@ -147,7 +176,14 @@ export default function WaitingScreen({ navigation, route }) {
           if (msg.status === "active") {
             setStatus("active");
             showBanner(t("approved_msg") || "🎉 Your account has been Approved!", "#10b981");
-            navigateAfterDelay("OwnerLoginScreen", 2000);
+            
+            // Fetch status via REST to get token & owner ID
+            const freshRes = await fetchWithAuth(`${BASE_URL}/api/check-owner-status/${encodeURIComponent(phone)}/`);
+            const freshData = freshRes.ok ? await freshRes.json() : {};
+            
+            setTimeout(async () => {
+              await handleActiveApproval(freshData);
+            }, 2000);
           } else if (msg.status === "suspend") {
             setStatus("suspend");
             const wsReason =

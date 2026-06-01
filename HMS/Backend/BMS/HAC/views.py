@@ -1636,14 +1636,15 @@ def owner_profile_update(request, phone):
         new_phone = request.data.get('phone') or request.data.get('phoneNumber')
         if new_phone and new_phone.strip():
             stripped_new_phone = new_phone.strip()
-            # Check if this phone is already taken by ANOTHER owner
-            existing = Owners.objects.filter(phone__iexact=stripped_new_phone).exclude(pk=owner.pk).first()
-            if existing:
-                return Response({
-                    "message": "This phone number is already registered with another account.",
-                    "error": "Phone already exists"
-                }, status=status.HTTP_400_BAD_REQUEST)
-            owner.phone = stripped_new_phone
+            if stripped_new_phone != owner.phone:
+                # Check if this phone is already taken by ANOTHER owner
+                existing = Owners.objects.filter(phone__iexact=stripped_new_phone).exclude(pk=owner.pk).first()
+                if existing:
+                    return Response({
+                        "message": "This phone number is already registered with another account.",
+                        "error": "Phone already exists"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                owner.phone = stripped_new_phone
        
         if 'owner_img_field' in request.FILES:
             owner.owner_img_field = request.FILES['owner_img_field']
@@ -1868,7 +1869,7 @@ def get_tenant_payment_details(request, phone):
                     Q(phone__iexact=tenant_phone) |
                     Q(phone__iexact=tenant_phone)
                 ),
-                owner_phone=owner.phone
+                owner_phone=owner.owner_id
             ).order_by('-id').first()
  
         # FALLBACK SEARCH
@@ -1881,7 +1882,7 @@ def get_tenant_payment_details(request, phone):
                         Q(phone__iexact=tenant_phone) |
                         Q(phone__iexact=tenant_phone)
                     ),
-                    owner_phone=owner.phone
+                    owner_phone=owner.owner_id
                 ).order_by('-id').first()
  
                 if record:
@@ -1935,7 +1936,7 @@ def get_tenant_payment_details(request, phone):
             # 1. Try to find a previous successful payment for this specific property
             prop_name = request_obj.property_name if request_obj else ""
             prev_p = Payment.objects.filter(
-                owner_phone=owner.phone,
+                owner_phone=owner.owner_id,
                 property_name=prop_name,
                 status='SUCCESS'
             ).order_by('-id').first()
@@ -1962,7 +1963,7 @@ def get_tenant_payment_details(request, phone):
  
                     # Check each bed table for this other tenant
                     for table in [TenantBeds, ApartmentTenantBeds, CommercialTenantBeds]:
-                        other_record = table.objects.filter(phone__iexact=other_tenant_phone, owner_phone__iexact=owner.phone).first()
+                        other_record = table.objects.filter(phone__iexact=other_tenant_phone, owner_phone__iexact=owner.owner_id).first()
                         if other_record and other_record.rent:
                             found_rent = float(other_record.rent)
                             break
@@ -1974,7 +1975,7 @@ def get_tenant_payment_details(request, phone):
                 else:
                     # 3. Last Resort: Check any payment record (even pending) for this property
                     any_p = Payment.objects.filter(
-                        owner_phone=owner.phone,
+                        owner_phone=owner.owner_id,
                         property_name=prop_name
                     ).order_by('-id').first()
                     if any_p:
@@ -2020,7 +2021,7 @@ def get_tenant_payment_details(request, phone):
         # 1. Check for SUCCESSFUL payment this month
         has_paid = Payment.objects.filter(
             tenant_phone__iexact=tenant_phone,
-            owner_phone__iexact=owner.phone,
+            owner_phone__iexact=owner.owner_id,
             status='SUCCESS',
             created_at__year=current_year,
             created_at__month=current_month
@@ -2035,7 +2036,7 @@ def get_tenant_payment_details(request, phone):
             # 2. Check for PENDING payment this month (Verifying)
             has_pending = Payment.objects.filter(
                 tenant_phone__iexact=tenant_phone,
-                owner_phone__iexact=owner.phone,
+                owner_phone__iexact=owner.owner_id,
                 status='PENDING',
                 created_at__year=current_year,
                 created_at__month=current_month
@@ -2058,7 +2059,7 @@ def get_tenant_payment_details(request, phone):
         # =========================================
         last_p = Payment.objects.filter(
             tenant_phone__iexact=tenant_phone,
-            owner_phone__iexact=owner.phone
+            owner_phone__iexact=owner.owner_id
         ).order_by('-created_at').first()
  
         owner_issue = Issue.objects.filter(
@@ -2529,11 +2530,17 @@ def check_owner_status(request, phone):
     if remaining_seconds < 0:
         remaining_seconds = 0
  
-    return Response({
+    response_data = {
         "status": owner.status,
         "time_left_seconds": remaining_seconds,
         "reason": owner.suspension_reason or ""
-    })
+    }
+    if owner.status == "active":
+        response_data["token"] = generate_jwt_token(owner)
+        response_data["owner_id"] = owner.owner_id
+        response_data["owner_name"] = owner.name
+        response_data["owner_phone"] = owner.phone
+    return Response(response_data)
  
  
 @api_view(['POST'])

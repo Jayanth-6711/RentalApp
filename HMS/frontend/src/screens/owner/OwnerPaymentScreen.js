@@ -64,7 +64,7 @@ const COLORS = {
   glassBorder: 'rgba(255, 255, 255, 0.3)',
 };
 
-const OwnerPaymentScreen = ({ navigation }) => {
+const OwnerPaymentScreen = () => {
   const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -86,7 +86,7 @@ const OwnerPaymentScreen = ({ navigation }) => {
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState(null);
   const [customMessage, setCustomMessage] = useState('');
-  
+
   const [selectedProof, setSelectedProof] = useState(null);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -109,8 +109,8 @@ const OwnerPaymentScreen = ({ navigation }) => {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   // Add these to your existing useState hooks
-const [verificationQueue, setVerificationQueue] = useState([]);
-const [selectedScreenshot, setSelectedScreenshot] = useState(null);
+  const [verificationQueue, setVerificationQueue] = useState([]);
+  const [selectedScreenshot, setSelectedScreenshot] = useState(null);
 
   // UPI and QR State
   const [upiId, setUpiId] = useState("");
@@ -145,19 +145,19 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
   const validateUpi = (id) => {
     if (!id) return "UPI ID is required";
     if (id.length > 30) return "Maximum 30 characters allowed";
-    
+
     // Check for spaces
     if (/\s/.test(id)) return "Spaces are not allowed";
-    
+
     // Check for exactly one @
     const atCount = (id.match(/@/g) || []).length;
     if (atCount !== 1) return "Must have exactly one @";
-    
+
     // Valid formats like name@paytm or user123@ybl
     // Allowed before @: letters, numbers, . _ -
     const upiRegex = /^[a-zA-Z0-9.\-_]+@[a-zA-Z]{2,}$/;
     if (!upiRegex.test(id)) return "Invalid UPI format";
-    
+
     return "";
   };
 
@@ -191,11 +191,11 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
         if (phone) {
           // 1. Check local storage first for speed
           const setupStatus = await AsyncStorage.getItem(`setup_complete_${phone}`);
-          
+
           // 2. Fetch from server to be sure
           const response = await fetchWithAuth(`${BASE_URL}/api/owner_data/${encodeURIComponent(phone.trim())}/`);
           const data = await response.json();
-          
+
           if (response.ok && data.step1) {
             upi = data.step1.upiId || "";
             qr = data.step1.qrCode || null;
@@ -203,7 +203,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
             setUpiId(upi);
             setPhoneNumber(phoneNumber);
             setQrCode(qr ? (qr.startsWith('http') ? qr : `${BASE_URL}${qr}`) : null);
-            
+
             // If server has data, it means setup was done elsewhere or previously
             if (upi || qr) {
               await AsyncStorage.setItem(`setup_complete_${phone}`, "true");
@@ -225,7 +225,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
       setHasInitialized(true);
     };
     initializeData();
-    
+
     // Background polling for payment updates
     const pollId = setInterval(() => {
       fetchPayments(true);
@@ -321,7 +321,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
           tenant_phone: item.tenant_phone,
           description: item.description
         }));
-      
+
       setVerificationQueue(queue);
 
       // Update stats
@@ -398,7 +398,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
     const upiErr = validateUpi(upiId);
     const phoneErr = validatePhone(phoneNumber);
     const hasQr = newQrCode || qrCode;
-    
+
     if (upiErr || phoneErr || !hasQr) {
       if (upiErr) setUpiError(upiErr);
       if (phoneErr) setPhoneError(phoneErr);
@@ -448,7 +448,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
             setQrCode(newQrCode.uri);
           }
         }
-        
+
         // Update UPI ID from server response if available, otherwise keep current
         const serverUpi = result.upiId || result.step1?.upiId;
         if (serverUpi) {
@@ -461,13 +461,13 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
         }
 
         setNewQrCode(null);
-        
+
         // EXIT Setup Mode immediately if we were in it
         setIsSetupMode(false);
-        
+
         // Refresh payments to update stats/dashboard
         await fetchPayments();
-        
+
         setShowUpiModal(false);
         Alert.alert("Success", "Payment details updated successfully!");
       } else {
@@ -505,8 +505,8 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
       await axios.post(`${BASE_URL}/api/send-tenant-notification/`, {
         tenantPhone: tenantPhone,
         title: amount ? 'Payment Request' : 'Rent Payment Reminder',
-        message: amount 
-          ? `Hi ${tenantName}, please pay ₹${amount.toLocaleString()} for your rent.` 
+        message: amount
+          ? `Hi ${tenantName}, please pay ₹${amount.toLocaleString()} for your rent.`
           : `Hi ${tenantName}, this is a reminder for your rent payment. Please pay as soon as possible.`,
         type: amount ? 'PAYMENT_REQUEST' : 'REMINDER',
         amount: amount
@@ -525,7 +525,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
       console.log("Starting bulk reminders...");
       const pendingTenants = tenantData.filter(t => t.status === 'due');
       console.log("Pending tenants count:", pendingTenants.length);
-      
+
       if (pendingTenants.length === 0) {
         Alert.alert('No Pending Payments', 'All tenants have already paid for this month.');
         return;
@@ -533,7 +533,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
 
       setLoading(true);
       let successCount = 0;
-      
+
       for (const tenant of pendingTenants) {
         if (tenant.tenant_phone) {
           try {
@@ -550,7 +550,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
           }
         }
       }
-      
+
       setLoading(false);
       Alert.alert('Success', `Reminders sent to ${successCount} tenants successfully.`);
       setShowPendingModal(false);
@@ -566,28 +566,28 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
   };
 
   const handleMonthChange = (direction) => {
-    const months = ['January', 'February', 'March', 'April', 'May', 'June', 
-                    'July', 'August', 'September', 'October', 'November', 'December'];
+    const months = ['January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'];
     const currentMonthIndex = months.findIndex(m => selectedMonth.startsWith(m));
     let newMonthIndex = currentMonthIndex + direction;
-    
+
     if (newMonthIndex < 0) newMonthIndex = 11;
     if (newMonthIndex > 11) newMonthIndex = 0;
-    
+
     const currentYear = parseInt(selectedMonth.split(' ')[1]);
     let newYear = currentYear;
-    
+
     if (newMonthIndex === 0 && currentMonthIndex === 11) newYear = currentYear + 1;
     if (newMonthIndex === 11 && currentMonthIndex === 0) newYear = currentYear - 1;
-    
+
     setSelectedMonth(`${months[newMonthIndex]} ${newYear}`);
   };
 
   const onDateChange = (event, selectedDate) => {
     setShowDatePicker(Platform.OS === 'ios');
     if (selectedDate) {
-      const months = ['January', 'February', 'March', 'April', 'May', 'June', 
-                      'July', 'August', 'September', 'October', 'November', 'December'];
+      const months = ['January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'];
       const month = months[selectedDate.getMonth()];
       const year = selectedDate.getFullYear();
       setSelectedMonth(`${month} ${year}`);
@@ -602,7 +602,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
         txn_ref: txn_ref,
         status: newStatus === 'paid' ? 'SUCCESS' : 'FAILED'
       });
-      
+
       Alert.alert('Status Updated', `Tenant payment status has been updated to ${newStatus}.`);
       fetchPayments(); // Refresh data
       setShowFilterModal(false);
@@ -620,8 +620,8 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
       `Confirm full cash payment of ₹${tenant.amount.toLocaleString()} from ${tenant.name}?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Yes, Full Paid', 
+        {
+          text: 'Yes, Full Paid',
           onPress: async () => {
             try {
               setLoading(true);
@@ -629,7 +629,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                 txn_ref: tenant.txn_ref,
                 status: 'SUCCESS'
               });
-              
+
               Alert.alert('Success', 'Full cash payment recorded.');
               fetchPayments(); // Refresh data
             } catch (error) {
@@ -644,16 +644,16 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
     );
   };
 
-    const handleMarkAsCashPaid = (tenant) => {
-      setSelectedTenant(tenant);
-      setCashPartialData({
-        paidAmount: tenant.amount * 0.5,
-        remainingBalance: tenant.amount * 0.5,
-        remainingDueDate: '20 May 2025',
-        tenantNote: 'Will pay remaining amount on 20th'
-      });
-      setShowCashPartialModal(true);
-    };
+  const handleMarkAsCashPaid = (tenant) => {
+    setSelectedTenant(tenant);
+    setCashPartialData({
+      paidAmount: tenant.amount * 0.5,
+      remainingBalance: tenant.amount * 0.5,
+      remainingDueDate: '20 May 2025',
+      tenantNote: 'Will pay remaining amount on 20th'
+    });
+    setShowCashPartialModal(true);
+  };
 
   const handleSendMessage = () => {
     if (customMessage.trim()) {
@@ -669,16 +669,16 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
   const handleVerifyPayment = async (proofId, tenantId, txn_ref, tenantPhone, tenantName) => {
     try {
       console.log("Verifying payment:", txn_ref);
-      
+
       // Optimistic UI update: Remove from queue immediately
       setVerificationQueue(prev => prev.filter(item => item.txn_ref !== txn_ref));
-      
+
       setLoading(true);
       const response = await axios.post(`${BASE_URL}/api/update-payment/`, {
         txn_ref: txn_ref,
         status: 'SUCCESS'
       });
-      
+
       console.log("Verify Response:", response.data);
 
       // 🔔 Send Notification to Tenant
@@ -706,16 +706,16 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
   const handleRejectPayment = async (proofId, txn_ref, tenantPhone, tenantName) => {
     try {
       console.log("Rejecting payment:", txn_ref);
-      
+
       // Optimistic UI update: Remove from queue immediately
       setVerificationQueue(prev => prev.filter(item => item.txn_ref !== txn_ref));
-      
+
       setLoading(true);
       const response = await axios.post(`${BASE_URL}/api/update-payment/`, {
         txn_ref: txn_ref,
         status: 'FAILED'
       });
-      
+
       console.log("Reject Response:", response.data);
 
       // 🔔 Send Notification to Tenant
@@ -743,7 +743,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
   const handleSetReminder = async (proof) => {
     try {
       console.log("Setting partial reminder for:", proof.name);
-      
+
       if (proof.tenant_phone) {
         setLoading(true);
         await axios.post(`${BASE_URL}/api/send-tenant-notification/`, {
@@ -754,7 +754,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
         setLoading(false);
         Alert.alert('Success', 'Partial payment confirmed and tenant notified.');
       }
-      
+
       // Close the partial payment modal
       setShowPartialPaymentModal(false);
       setShowVerifyModal(false); // Close the whole flow
@@ -768,7 +768,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
 
   const handleConfirmCashPartial = () => {
     // Update tenant status to partial paid
-    setTenantData(tenantData.map(t => 
+    setTenantData(tenantData.map(t =>
       t.id === selectedTenant.id ? { ...t, status: 'partial', paymentMethod: 'Cash', paidDate: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) } : t
     ));
     // Set the tenant for messaging
@@ -806,14 +806,14 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
         <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
         <View style={styles.setupGateContent}>
           <View style={styles.setupGateCard}>
-            <TouchableOpacity 
-              style={styles.setupGateClose} 
+            <TouchableOpacity
+              style={styles.setupGateClose}
               onPress={() => setSetupDismissed(true)}
               activeOpacity={0.7}
             >
               <Ionicons name="close" size={24} color="#64748B" />
             </TouchableOpacity>
-            
+
             <View style={styles.setupGateHeader}>
               <View style={styles.setupGateIconCircle}>
                 <Animated.View style={[styles.setupGatePulse, { transform: [{ scale: pulseAnim }] }]} />
@@ -832,11 +832,11 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                   {upiError && <Text style={{ fontSize: 11, color: COLORS.dangerRed, fontWeight: '700' }}>{upiError}</Text>}
                 </View>
                 <View style={[
-                    styles.setupGateInput, 
-                    upiId && styles.setupGateInputActive,
-                    !!upiError && { borderColor: COLORS.dangerRed }
-                  ]}>
-                    <MaterialCommunityIcons name="at" size={20} color={upiError ? COLORS.dangerRed : (upiId ? "#8B5CF6" : "#94A3B8")} />
+                  styles.setupGateInput,
+                  upiId && styles.setupGateInputActive,
+                  !!upiError && { borderColor: COLORS.dangerRed }
+                ]}>
+                  <MaterialCommunityIcons name="at" size={20} color={upiError ? COLORS.dangerRed : (upiId ? "#8B5CF6" : "#94A3B8")} />
                   <TextInput
                     style={styles.setupGateTextInput}
                     placeholder="91888XXXXX@upi"
@@ -856,7 +856,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                   {phoneError && <Text style={{ fontSize: 11, color: COLORS.dangerRed, fontWeight: '700' }}>Invalid Phone</Text>}
                 </View>
                 <View style={[
-                  styles.setupGateInput, 
+                  styles.setupGateInput,
                   phoneNumber && styles.setupGateInputActive,
                   !!phoneError && { borderColor: COLORS.dangerRed }
                 ]}>
@@ -878,9 +878,9 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                   <Text style={styles.setupGateLabel}>{t("Payment qr") || "Payment QR"}</Text>
                   {qrError && <Text style={{ fontSize: 11, color: COLORS.dangerRed, fontWeight: '700' }}>Upload Screenshot</Text>}
                 </View>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[
-                    styles.setupGateQrBox, 
+                    styles.setupGateQrBox,
                     (newQrCode || qrCode) && styles.setupGateQrBoxActive,
                     !!qrError && { borderColor: COLORS.dangerRed }
                   ]}
@@ -892,9 +892,9 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                 >
                   {(newQrCode || qrCode) ? (
                     <View style={styles.setupGateQrPreview}>
-                      <Image 
-                        source={{ uri: newQrCode ? newQrCode.uri : qrCode }} 
-                        style={styles.setupGateQrImage} 
+                      <Image
+                        source={{ uri: newQrCode ? newQrCode.uri : qrCode }}
+                        style={styles.setupGateQrImage}
                       />
                       <View style={styles.setupGateQrBadge}>
                         <Ionicons name="camera" size={12} color="#FFF" />
@@ -912,7 +912,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.setupGateBtn, (savingBank || !upiId || !!upiError || !phoneNumber || !!phoneError || !(newQrCode || qrCode)) && styles.setupGateBtnDisabled]}
                 onPress={handleSaveBank}
                 disabled={!!(savingBank || !upiId || upiError || !phoneNumber || phoneError || !(newQrCode || qrCode))}
@@ -949,9 +949,9 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
-      
-      <ScrollView 
-        showsVerticalScrollIndicator={false} 
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primaryBlue]} />
@@ -961,13 +961,9 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerTop}>
-              <View style={[styles.headerLeft, { flexDirection: 'row', alignItems: 'center' }]}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 12, padding: 4 }}>
-                  <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
-                </TouchableOpacity>
-                <View>
-                  <Text style={styles.headerTitle}>{t("Owner dashboard") || "Owner Dashboard"}</Text>
-                  {upiId ? (
+              <View style={styles.headerLeft}>
+                <Text style={styles.headerTitle}>{t("Owner dashboard") || "Owner Dashboard"}</Text>
+                {upiId ? (
                   <View style={styles.activeUpiBadge}>
                     <MaterialCommunityIcons name="check-decagram" size={14} color={COLORS.successGreen} />
                     <Text style={styles.activeUpiText}>{upiId}</Text>
@@ -975,40 +971,39 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                 ) : (
                   <Text style={styles.headerSubtitle}>{t("Manage payments") || "Manage your property payments"}</Text>
                 )}
-                </View>
               </View>
               <View style={styles.headerRightActions}>
-                <TouchableOpacity 
-          style={styles.setupPaymentBtn} 
-          onPress={() => setShowUpiModal(true)}
-        >
-          <LinearGradient
-            colors={['#8B5CF6', '#6D28D9']}
-            style={styles.setupPaymentGradient}
-          >
-            {qrCode ? (
-              <Image source={{ uri: qrCode }} style={styles.miniQrPreview} />
-            ) : (
-              <MaterialCommunityIcons name="qrcode-edit" size={20} color="#FFF" />
-            )}
-            <Text style={styles.setupPaymentText}>
-              {upiId || qrCode ? (t("Edit payment details") || "Edit Payment Details") : (t("Payment setup") || "Payment Setup")}
-            </Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
+                <TouchableOpacity
+                  style={styles.setupPaymentBtn}
+                  onPress={() => setShowUpiModal(true)}
+                >
+                  <LinearGradient
+                    colors={['#8B5CF6', '#6D28D9']}
+                    style={styles.setupPaymentGradient}
+                  >
+                    {qrCode ? (
+                      <Image source={{ uri: qrCode }} style={styles.miniQrPreview} />
+                    ) : (
+                      <MaterialCommunityIcons name="qrcode-edit" size={20} color="#FFF" />
+                    )}
+                    <Text style={styles.setupPaymentText}>
+                      {upiId || qrCode ? (t("Edit payment details") || "Edit Payment Details") : (t("Payment setup") || "Payment Setup")}
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <View style={styles.headerActions}>
-              <TouchableOpacity 
-                style={styles.monthSelector} 
+              <TouchableOpacity
+                style={styles.monthSelector}
                 onPress={() => setShowDatePicker(true)}
               >
                 <Ionicons name="calendar" size={20} color={COLORS.primaryBlue} />
                 <Text style={styles.monthText}>{selectedMonth}</Text>
                 <Ionicons name="chevron-down" size={16} color={COLORS.primaryBlue} />
               </TouchableOpacity>
-              
+
               {showDatePicker && (
                 <DateTimePicker
                   value={selectedDate}
@@ -1022,8 +1017,8 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
 
           {/* Enhanced Verification Alert */}
           {verificationQueue.length > 0 && (
-            <TouchableOpacity 
-              style={styles.premiumVerificationAlert} 
+            <TouchableOpacity
+              style={styles.premiumVerificationAlert}
               onPress={() => {
                 setSelectedProof(verificationQueue[0]);
                 setShowVerifyModal(true);
@@ -1060,7 +1055,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
           <View style={styles.summaryCards}>
 
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.summaryCard, styles.summaryCardBlue, filterTab === 'all' && styles.summaryCardActive]}
               onPress={() => setFilterTab('all')}
             >
@@ -1073,7 +1068,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                 <Text style={styles.summarySubtext}>{t("This month") || "This Month"}</Text>
               </View>
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.summaryCard, styles.summaryCardGreen, filterTab === 'paid' && styles.summaryCardActive]}
               onPress={() => setFilterTab('paid')}
             >
@@ -1087,7 +1082,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
               </View>
             </TouchableOpacity>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.summaryCard, styles.summaryCardOrange, filterTab === 'due' && styles.summaryCardActive]}
               onPress={() => setFilterTab('due')}
             >
@@ -1101,17 +1096,17 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
               </View>
             </TouchableOpacity>
 
-            
+
           </View>
 
           {/* Tenant List Header */}
           <View style={styles.listHeader}>
             <Text style={styles.listTitle}>
-              {filterTab === 'all' ? (t("All tenants") || "All Tenants") : 
-               filterTab === 'paid' ? (t("Collected payments") || "Collected Payments") : 
-               (t("Pending payments") || "Pending Payments")}
+              {filterTab === 'all' ? (t("All tenants") || "All Tenants") :
+                filterTab === 'paid' ? (t("Collected payments") || "Collected Payments") :
+                  (t("Pending payments") || "Pending Payments")}
             </Text>
-            
+
           </View>
 
           {/* Tenant List */}
@@ -1119,7 +1114,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
             {filteredTenants.map((tenant, index) => {
               if (!tenant) return null;
               const statusStyle = getStatusStyle(tenant.status);
-              
+
               // Use Cash UI style for 'due' status
               if (tenant.status === 'due') {
                 return (
@@ -1136,19 +1131,19 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                     </View>
                     <View style={styles.cashTenantRight}>
                       <View style={styles.cashActionColumn}>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                           style={styles.markCashBtn}
                           onPress={() => handleMarkAsCashPaid(tenant)}
                         >
                           <Text style={styles.markCashBtnText}>{t("Mark cash paid") || "Mark as Cash Paid"}</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                           style={styles.fullPaidBtnSmall}
                           onPress={() => handleFullCashPaid(tenant)}
                         >
                           <Text style={styles.fullPaidBtnTextSmall}>{t("Full paid") || "Full Paid"}</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                           style={styles.requestBtn}
                           onPress={() => {
                             setSelectedTenant(tenant);
@@ -1199,7 +1194,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                       <Text style={[styles.statusText, { color: statusStyle.color }]}>{t(statusStyle.label?.toLowerCase()) || statusStyle.label}</Text>
                     </View>
                     {tenant.payment_screenshot && (
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={styles.viewScreenshotBtn}
                         onPress={() => setSelectedScreenshot(tenant.payment_screenshot)}
                       >
@@ -1221,7 +1216,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                 <Text style={styles.reminderSubtitle}>{t("Send reminders pending") || "Send reminders to tenants with pending payments."}</Text>
               </View>
             </View>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.reminderBtn}
               onPress={() => setShowPendingModal(true)}
             >
@@ -1236,7 +1231,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
       {/* Pending Payments Modal */}
       <Modal visible={showPendingModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.modalBackdrop}
             activeOpacity={1}
             onPress={() => setShowPendingModal(false)}
@@ -1273,7 +1268,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                     </View>
                     <View style={styles.pendingRight}>
                       <Text style={styles.pendingAmount}>₹{tenant.amount.toLocaleString()}</Text>
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={styles.sendRemindBtn}
                         onPress={() => handleSendReminder(tenant.name, tenant.tenant_phone, tenant.amount)}
                       >
@@ -1286,7 +1281,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
               })}
             </ScrollView>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.sendAllRemindBtn}
               onPress={handleSendReminderToAll}
             >
@@ -1299,7 +1294,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
       {/* Message Modal */}
       <Modal visible={showMessageModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.modalBackdrop}
             activeOpacity={1}
             onPress={() => setShowMessageModal(false)}
@@ -1321,19 +1316,19 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
             <View style={styles.messageModalBody}>
               <View style={styles.quickMessageContainer}>
                 <Text style={styles.quickMessageTitle}>{t("Quick messages") || "Quick Messages"}</Text>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.quickMessageBtn}
                   onPress={() => setCustomMessage(t("Payment reminder msg") || 'Please pay your rent by the due date.')}
                 >
                   <Text style={styles.quickMessageText}>{t("Payment reminder") || "Payment Reminder"}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.quickMessageBtn}
                   onPress={() => setCustomMessage(t("Overdue notice msg") || 'Your rent is overdue. Please pay immediately.')}
                 >
                   <Text style={styles.quickMessageText}>{t("Overdue notice") || "Overdue Notice"}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.quickMessageBtn}
                   onPress={() => setCustomMessage(t("Payment received msg") || 'Thank you for your payment!')}
                 >
@@ -1352,7 +1347,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                 numberOfLines={4}
               />
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.sendMessageBtn}
                 onPress={handleSendMessage}
               >
@@ -1379,8 +1374,8 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-            
-              
+
+
 
               {/* Verification Requests for Selected Date */}
               <View style={styles.requestsList}>
@@ -1403,7 +1398,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                       {proof.proofImage ? (
                         <>
                           <Text style={[styles.proofLabel, { marginTop: 12 }]}>{t("Payment screenshot") || "Payment Screenshot"}</Text>
-                          
+
                           {proof.description && (
                             <View style={styles.notifMessageContainer}>
                               <Ionicons name="chatbubble-ellipses-outline" size={16} color="#6366F1" />
@@ -1411,14 +1406,14 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                             </View>
                           )}
 
-                          <TouchableOpacity 
+                          <TouchableOpacity
                             style={styles.screenshotPlaceholder}
                             onPress={() => setSelectedScreenshot(proof.proofImage)}
                           >
                             <View style={{ width: '100%', height: '100%' }}>
-                              <Image 
-                                source={{ uri: proof.proofImage }} 
-                                style={styles.screenshotImage} 
+                              <Image
+                                source={{ uri: proof.proofImage }}
+                                style={styles.screenshotImage}
                               />
                               <View style={styles.zoomBadge}>
                                 <Ionicons name="expand" size={16} color="#FFF" />
@@ -1446,7 +1441,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                       <View style={styles.proofFooter}>
                         <Text style={styles.proofTimestamp}>{proof.timestamp}</Text>
                         <View style={styles.proofActions}>
-                          <TouchableOpacity 
+                          <TouchableOpacity
                             style={styles.partialBtn}
                             onPress={() => {
                               setSelectedProof(proof);
@@ -1462,17 +1457,17 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                             <Ionicons name="percent" size={18} color="#FFF" />
                             <Text style={styles.partialBtnText}>{t("Remaining") || "Remaining"}</Text>
                           </TouchableOpacity>
-                          <TouchableOpacity 
-                             style={styles.rejectSmallBtn}
-                             onPress={() => handleRejectPayment(proof.id, proof.txn_ref, proof.tenant_phone, proof.name)}
-                           >
-                             <Ionicons name="close" size={10} color="#FFF" />
-                             <Text style={styles.rejectSmallText}>{t("Reject") || "Reject"}</Text>
-                           </TouchableOpacity>
-                           <TouchableOpacity 
-                             style={styles.verifySmallBtn}
-                             onPress={() => handleVerifyPayment(proof.id, proof.tenantId, proof.txn_ref, proof.tenant_phone, proof.name)}
-                           >
+                          <TouchableOpacity
+                            style={styles.rejectSmallBtn}
+                            onPress={() => handleRejectPayment(proof.id, proof.txn_ref, proof.tenant_phone, proof.name)}
+                          >
+                            <Ionicons name="close" size={10} color="#FFF" />
+                            <Text style={styles.rejectSmallText}>{t("Reject") || "Reject"}</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.verifySmallBtn}
+                            onPress={() => handleVerifyPayment(proof.id, proof.tenantId, proof.txn_ref, proof.tenant_phone, proof.name)}
+                          >
                             <Ionicons name="checkmark" size={18} color="#FFF" />
                             <Text style={styles.verifySmallText}>{t("Verify") || "Verify"}</Text>
                           </TouchableOpacity>
@@ -1493,17 +1488,17 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
             {/* Full Image Modal INSIDE VerifyModal for better visibility */}
             <Modal visible={!!selectedScreenshot} transparent={true} animationType="fade">
               <View style={styles.fullImageModalContainer}>
-                <TouchableOpacity 
-                  style={styles.fullImageCloseBtn} 
+                <TouchableOpacity
+                  style={styles.fullImageCloseBtn}
                   onPress={() => setSelectedScreenshot(null)}
                 >
                   <Ionicons name="close-circle" size={40} color="#FFF" />
                 </TouchableOpacity>
                 {selectedScreenshot && (
-                  <Image 
-                    source={{ uri: selectedScreenshot }} 
-                    style={styles.fullImagePreview} 
-                    resizeMode="contain" 
+                  <Image
+                    source={{ uri: selectedScreenshot }}
+                    style={styles.fullImagePreview}
+                    resizeMode="contain"
                   />
                 )}
               </View>
@@ -1545,7 +1540,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                   <Ionicons name="cash-outline" size={20} color={COLORS.primaryBlue} />
                   <Text style={styles.partialTitle}>Payment Breakdown</Text>
                 </View>
-                
+
                 <View style={styles.partialRow}>
                   <Text style={styles.partialLabel}>Paid Amount</Text>
                   {isEditMode ? (
@@ -1566,19 +1561,19 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                     <Text style={styles.partialValue}>₹{partialPaymentData.paidAmount.toLocaleString()}</Text>
                   )}
                 </View>
-                
+
                 <View style={styles.partialRow}>
                   <Text style={styles.partialLabel}>Remaining Balance</Text>
                   <Text style={[styles.partialValue, styles.remainingValue]}>₹{partialPaymentData.remainingBalance.toLocaleString()}</Text>
                 </View>
-                
+
                 <View style={styles.partialRow}>
                   <Text style={styles.partialLabel}>Remaining Due Date</Text>
                   {isEditMode ? (
                     <TextInput
                       style={styles.editInput}
                       value={partialPaymentData.remainingDueDate}
-                      onChangeText={(text) => setPartialPaymentData({...partialPaymentData, remainingDueDate: text})}
+                      onChangeText={(text) => setPartialPaymentData({ ...partialPaymentData, remainingDueDate: text })}
                       placeholder="DD MMM YYYY"
                     />
                   ) : (
@@ -1593,7 +1588,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                   <TextInput
                     style={styles.editNoteInput}
                     value={partialPaymentData.tenantNote}
-                    onChangeText={(text) => setPartialPaymentData({...partialPaymentData, tenantNote: text})}
+                    onChangeText={(text) => setPartialPaymentData({ ...partialPaymentData, tenantNote: text })}
                     placeholder="Enter tenant note..."
                     multiline
                   />
@@ -1601,8 +1596,8 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                   <Text style={styles.noteText}>{partialPaymentData.tenantNote}</Text>
                 )}
               </View>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={styles.setReminderBtn}
                 onPress={() => handleSetReminder(selectedProof)}
               >
@@ -1647,7 +1642,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                   <Ionicons name="cash-outline" size={20} color={COLORS.primaryBlue} />
                   <Text style={styles.partialTitle}>Cash Payment Breakdown</Text>
                 </View>
-                
+
                 <View style={styles.partialRow}>
                   <Text style={styles.partialLabel}>Paid Amount (Cash)</Text>
                   {isEditMode ? (
@@ -1668,19 +1663,19 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                     <Text style={styles.partialValue}>₹{cashPartialData.paidAmount.toLocaleString()}</Text>
                   )}
                 </View>
-                
+
                 <View style={styles.partialRow}>
                   <Text style={styles.partialLabel}>Remaining Balance</Text>
                   <Text style={[styles.partialValue, styles.remainingValue]}>₹{cashPartialData.remainingBalance.toLocaleString()}</Text>
                 </View>
-                
+
                 <View style={styles.partialRow}>
                   <Text style={styles.partialLabel}>Remaining Due Date</Text>
                   {isEditMode ? (
                     <TextInput
                       style={styles.editInput}
                       value={cashPartialData.remainingDueDate}
-                      onChangeText={(text) => setCashPartialData({...cashPartialData, remainingDueDate: text})}
+                      onChangeText={(text) => setCashPartialData({ ...cashPartialData, remainingDueDate: text })}
                       placeholder="DD MMM YYYY"
                     />
                   ) : (
@@ -1695,7 +1690,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                   <TextInput
                     style={styles.editNoteInput}
                     value={cashPartialData.tenantNote}
-                    onChangeText={(text) => setCashPartialData({...cashPartialData, tenantNote: text})}
+                    onChangeText={(text) => setCashPartialData({ ...cashPartialData, tenantNote: text })}
                     placeholder="Enter tenant note..."
                     multiline
                   />
@@ -1703,8 +1698,8 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                   <Text style={styles.noteText}>{cashPartialData.tenantNote}</Text>
                 )}
               </View>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={styles.setReminderBtn}
                 onPress={handleConfirmCashPartial}
               >
@@ -1719,17 +1714,17 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
       {/* Full Image Modal for Verification */}
       <Modal visible={!!selectedScreenshot} transparent={true} animationType="fade">
         <View style={styles.fullImageModalContainer}>
-          <TouchableOpacity 
-            style={styles.fullImageCloseBtn} 
+          <TouchableOpacity
+            style={styles.fullImageCloseBtn}
             onPress={() => setSelectedScreenshot(null)}
           >
             <Ionicons name="close-circle" size={40} color="#FFF" />
           </TouchableOpacity>
           {selectedScreenshot && (
-            <Image 
-              source={{ uri: selectedScreenshot }} 
-              style={styles.fullImagePreview} 
-              resizeMode="contain" 
+            <Image
+              source={{ uri: selectedScreenshot }}
+              style={styles.fullImagePreview}
+              resizeMode="contain"
             />
           )}
         </View>
@@ -1738,7 +1733,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
       {/* UPI QR Setup Modal (Edit Mode) */}
       <Modal visible={showUpiModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.modalBackdrop}
             activeOpacity={1}
             onPress={() => setShowUpiModal(false)}
@@ -1770,65 +1765,65 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                       {upiError && <Text style={{ fontSize: 11, color: COLORS.dangerRed, fontWeight: '700' }}>{upiError}</Text>}
                     </View>
                     <View style={[
-                      styles.inputContainerPremium, 
+                      styles.inputContainerPremium,
                       upiId && styles.inputContainerActive,
                       !!upiError && { borderColor: COLORS.dangerRed }
                     ]}>
-                      <MaterialCommunityIcons 
-                        name="shield-check-outline" 
-                        size={22} 
-                        color={upiError ? COLORS.dangerRed : (upiId ? "#8B5CF6" : "#94A3B8")} 
-                        style={styles.inputIconLeft} 
+                      <MaterialCommunityIcons
+                        name="shield-check-outline"
+                        size={22}
+                        color={upiError ? COLORS.dangerRed : (upiId ? "#8B5CF6" : "#94A3B8")}
+                        style={styles.inputIconLeft}
                       />
                       <TextInput
-                          style={styles.textInputPremium}
-                          placeholder="91888XXXXX@upi"
-                          placeholderTextColor="#94A3B8"
-                          value={upiId}
-                          onChangeText={handleUpiChange}
-                          autoCapitalize="none"
-                          keyboardType="default"
-                        />
-                        {upiId && !upiError && <Ionicons name="checkmark-circle" size={20} color="#10B981" />}
-                      </View>
+                        style={styles.textInputPremium}
+                        placeholder="91888XXXXX@upi"
+                        placeholderTextColor="#94A3B8"
+                        value={upiId}
+                        onChangeText={handleUpiChange}
+                        autoCapitalize="none"
+                        keyboardType="default"
+                      />
+                      {upiId && !upiError && <Ionicons name="checkmark-circle" size={20} color="#10B981" />}
                     </View>
+                  </View>
 
-                    <View style={styles.inputGroupPremium}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text style={styles.inputLabelPremium}>{t("Phone number") || "Phone Number"}</Text>
-                        {phoneError && <Text style={{ fontSize: 11, color: COLORS.dangerRed, fontWeight: '700' }}>Invalid Phone</Text>}
-                      </View>
-                      <View style={[
-                        styles.inputContainerPremium, 
-                        phoneNumber && styles.inputContainerActive,
-                        !!phoneError && { borderColor: COLORS.dangerRed }
-                      ]}>
-                        <MaterialCommunityIcons 
-                          name="phone-outline" 
-                          size={22} 
-                          color={phoneError ? COLORS.dangerRed : (phoneNumber ? "#8B5CF6" : "#94A3B8")} 
-                          style={styles.inputIconLeft} 
-                        />
-                        <TextInput
-                          style={styles.textInputPremium}
-                          placeholder="Enter 10 digit number"
-                          placeholderTextColor="#94A3B8"
-                          value={phoneNumber}
-                          onChangeText={handlePhoneChange}
-                          keyboardType="numeric"
-                        />
-                        {phoneNumber.length === 10 && !phoneError && <Ionicons name="checkmark-circle" size={20} color="#10B981" />}
-                      </View>
+                  <View style={styles.inputGroupPremium}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={styles.inputLabelPremium}>{t("Phone number") || "Phone Number"}</Text>
+                      {phoneError && <Text style={{ fontSize: 11, color: COLORS.dangerRed, fontWeight: '700' }}>Invalid Phone</Text>}
                     </View>
-                  
+                    <View style={[
+                      styles.inputContainerPremium,
+                      phoneNumber && styles.inputContainerActive,
+                      !!phoneError && { borderColor: COLORS.dangerRed }
+                    ]}>
+                      <MaterialCommunityIcons
+                        name="phone-outline"
+                        size={22}
+                        color={phoneError ? COLORS.dangerRed : (phoneNumber ? "#8B5CF6" : "#94A3B8")}
+                        style={styles.inputIconLeft}
+                      />
+                      <TextInput
+                        style={styles.textInputPremium}
+                        placeholder="Enter 10 digit number"
+                        placeholderTextColor="#94A3B8"
+                        value={phoneNumber}
+                        onChangeText={handlePhoneChange}
+                        keyboardType="numeric"
+                      />
+                      {phoneNumber.length === 10 && !phoneError && <Ionicons name="checkmark-circle" size={20} color="#10B981" />}
+                    </View>
+                  </View>
+
                   <View style={styles.qrGroupPremium}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <Text style={styles.inputLabelPremium}>{t("Payment qr scanner") || "Payment QR Scanner"}</Text>
                       {qrError && <Text style={{ fontSize: 11, color: COLORS.dangerRed, fontWeight: '700' }}>Upload Screenshot</Text>}
                     </View>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={[
-                        styles.premiumQrBox, 
+                        styles.premiumQrBox,
                         (newQrCode || qrCode) && styles.premiumQrBoxActive,
                         !!qrError && { borderColor: COLORS.dangerRed }
                       ]}
@@ -1840,9 +1835,9 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                     >
                       {(newQrCode || qrCode) ? (
                         <View style={styles.premiumQrPreview}>
-                          <Image 
-                            source={{ uri: newQrCode ? newQrCode.uri : qrCode }} 
-                            style={styles.qrImageLarge} 
+                          <Image
+                            source={{ uri: newQrCode ? newQrCode.uri : qrCode }}
+                            style={styles.qrImageLarge}
                           />
                           <View style={styles.qrOverlayPremium}>
                             <LinearGradient
@@ -1868,7 +1863,7 @@ const [selectedScreenshot, setSelectedScreenshot] = useState(null);
                     </TouchableOpacity>
                   </View>
 
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={[styles.premiumSubmitBtn, (savingBank || !upiId || !!upiError || !phoneNumber || !!phoneError) && { opacity: 0.8 }]}
                     onPress={handleSaveBank}
                     disabled={!!(savingBank || !upiId || upiError || !phoneNumber || phoneError)}
@@ -2318,7 +2313,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 100,
   },
-  
+
   // Header
   header: {
     paddingHorizontal: 20,
@@ -2782,7 +2777,7 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     marginHorizontal: 12,
   },
-  
+
   // Summary Cards
   summaryCards: {
     flexDirection: 'row',
@@ -2845,7 +2840,7 @@ const styles = StyleSheet.create({
     color: COLORS.textLight,
     fontWeight: '500',
   },
-  
+
   // Tab Navigation
   tabContainer: {
     flexDirection: 'row',
@@ -2872,7 +2867,7 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: '#FFF',
   },
-  
+
   // List Header
   listHeader: {
     flexDirection: 'row',
@@ -2898,7 +2893,7 @@ const styles = StyleSheet.create({
   filterBtn: {
     padding: 6,
   },
-  
+
   // Tenant List
   tenantList: {
     paddingHorizontal: 16,
@@ -3000,7 +2995,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFF',
   },
-  
+
   // Payment Method Badge
   paymentMethodBadge: {
     flexDirection: 'row',
@@ -3027,7 +3022,7 @@ const styles = StyleSheet.create({
   paymentMethodTextCash: {
     color: COLORS.warningOrange,
   },
-  
+
   // Cash Payment Screen
   cashPaymentScreen: {
     paddingHorizontal: 16,
@@ -3145,7 +3140,7 @@ const styles = StyleSheet.create({
     color: COLORS.successGreen,
     marginLeft: 6,
   },
-  
+
   // Reminder Section
   reminderSection: {
     flexDirection: 'row',
@@ -3198,7 +3193,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFF',
   },
-  
+
   // Modal
   modalOverlay: {
     flex: 1,
@@ -3317,7 +3312,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
-  
+
   // Bottom Navigation
   bottomNav: {
     flexDirection: 'row',
@@ -3349,7 +3344,7 @@ const styles = StyleSheet.create({
     color: COLORS.primaryBlue,
     fontWeight: '600',
   },
-  
+
   // Status Options
   statusOptions: {
     flexDirection: 'row',
@@ -3378,7 +3373,7 @@ const styles = StyleSheet.create({
   statusOptionTextActive: {
     color: '#FFF',
   },
-  
+
   // Center Modal
   centerModalContent: {
     flex: 1,
@@ -3414,7 +3409,7 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontWeight: '500',
   },
-  
+
   // Message Modal
   messageModalBody: {
     paddingHorizontal: 24,
@@ -3539,12 +3534,12 @@ const styles = StyleSheet.create({
   dateDisplay: { flex: 1, alignItems: 'center' },
   dateText: { fontSize: 16, fontWeight: '700', color: COLORS.textPrimary },
   requestsList: { flex: 1 },
-  proofCard: { 
-    backgroundColor: '#FFFFFF', 
-    borderRadius: 24, 
-    padding: 24, 
-    borderWidth: 1, 
-    borderColor: '#F1F5F9', 
+  proofCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
     marginBottom: 24,
     shadowColor: '#64748B',
     shadowOffset: { width: 0, height: 8 },
@@ -3560,16 +3555,16 @@ const styles = StyleSheet.create({
   proofRoom: { fontSize: 13, color: '#64748B', fontWeight: '500', marginTop: 2 },
   proofAmount: { fontSize: 20, fontWeight: '900', color: COLORS.primaryBlue },
   proofLabel: { fontSize: 12, color: '#64748B', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 },
-  screenshotPlaceholder: { 
-    width: '100%', 
-    height: 300, 
-    backgroundColor: '#F1F5F9', 
-    borderRadius: 20, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    borderStyle: 'solid', 
-    borderWidth: 1, 
-    borderColor: '#E2E8F0', 
+  screenshotPlaceholder: {
+    width: '100%',
+    height: 300,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderStyle: 'solid',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     overflow: 'hidden',
     marginVertical: 10,
   },
@@ -3598,55 +3593,55 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  rejectSmallBtn: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: COLORS.dangerRed, 
-    paddingHorizontal: 8, 
-    paddingVertical: 10, 
-    borderRadius: 8, 
+  rejectSmallBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.dangerRed,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+    borderRadius: 8,
     flex: 0.8,
     justifyContent: 'center',
-    marginRight: 6 
+    marginRight: 6
   },
-  rejectSmallText: { 
-    color: '#FFFFFF', 
-    fontSize: 11, 
-    fontWeight: '700', 
-    marginLeft: 4 
+  rejectSmallText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 4
   },
-  verifySmallBtn: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: COLORS.successGreen, 
-    paddingHorizontal: 12, 
-    paddingVertical: 10, 
+  verifySmallBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.successGreen,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderRadius: 8,
     flex: 1,
     justifyContent: 'center'
   },
-  verifySmallText: { 
-    color: '#FFFFFF', 
-    fontSize: 11, 
-    fontWeight: '700', 
-    marginLeft: 4 
+  verifySmallText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 4
   },
-  partialBtn: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: COLORS.warningOrange, 
-    paddingHorizontal: 8, 
-    paddingVertical: 10, 
-    borderRadius: 8, 
+  partialBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.warningOrange,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+    borderRadius: 8,
     flex: 1,
     justifyContent: 'center',
-    marginRight: 6 
+    marginRight: 6
   },
-  partialBtnText: { 
-    color: '#FFFFFF', 
-    fontSize: 11, 
-    fontWeight: '700', 
-    marginLeft: 4 
+  partialBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 4
   },
   tenantActionButtons: {
     flexDirection: 'row',
