@@ -2941,8 +2941,11 @@ def tenant_notifications(request, identifier):
     # JOIN REQUEST NOTIFICATIONS
     for r in requests:
         status_val = r.status
-        if tenant.is_vacant or tenant.owner != r.owner:
+        if tenant.owner and tenant.owner != r.owner:
             if status_val in ['completed', 'accepted', 'allotted', 'joined', 'active']:
+                status_val = 'withdrawn'
+        elif tenant.is_vacant:
+            if status_val in ['completed', 'joined', 'active']:
                 status_val = 'withdrawn'
         data.append({
             "id": f"req_{r.id}",
@@ -3247,8 +3250,11 @@ def check_request_status(request, tenant_phone, owner_phone, property_name):
  
         if join_req:
             status_val = join_req.status
-            if tenant.is_vacant or tenant.owner != owner:
+            if tenant.owner and tenant.owner != owner:
                 if status_val in ['completed', 'accepted', 'allotted', 'joined', 'active']:
+                    status_val = 'none'
+            elif tenant.is_vacant:
+                if status_val in ['completed', 'joined', 'active']:
                     status_val = 'none'
             return Response({
                 "status": status_val
@@ -3301,7 +3307,7 @@ def withdraw_request(request):
         query = JoinRequest.objects.filter(
             tenant=tenant,
             owner=owner,
-            status__in=['pending', 'accepted', 'allotted']
+            status__in=['pending', 'accepted', 'allotted', 'completed']
         )
        
         pre_filter_count = query.count()
@@ -3349,12 +3355,13 @@ def withdraw_request(request):
         # Cleanup: If the tenant has no more active requests, clear their current owner
         has_active = JoinRequest.objects.filter(
             tenant=tenant,
-            status__in=['pending', 'accepted', 'allotted']
+            status__in=['pending', 'accepted', 'allotted', 'completed']
         ).exists()
        
         if not has_active:
             print("   [BACKEND] No more active requests. Clearing tenant.owner reference.")
             tenant.owner = None
+            tenant.is_vacant = True
             tenant.save()
         else:
             print("   [BACKEND] Tenant still has other active requests.")

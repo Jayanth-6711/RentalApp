@@ -995,14 +995,14 @@ export default function BuildingScreen({ route }) {
   //     }
 
   //     const response = await fetch(
-  //       "http://192.168.1.27:8000/api/tenentbeds/",
+  //       "http://192.168.29.207:8000/api/tenentbeds/",
   //       {
   //         method: "POST",
   //         body: formData,
   //       }
   //     );
   // const res1 = await fetch(
-  //       "http://192.168.1.27:8000/api/apartmentbeds/",
+  //       "http://192.168.29.207:8000/api/apartmentbeds/",
   //        {
   //         method: "POST",
   //         body: formData,

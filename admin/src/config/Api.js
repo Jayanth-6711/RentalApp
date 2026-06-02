@@ -1,4 +1,4 @@
-const BASE_URL = "http://192.168.1.19:8000";
+const BASE_URL = "http://192.168.29.207:8000";
 export const WS_BASE_URL = BASE_URL.replace("http://", "ws://").replace("https://", "wss://");
 
 export const fetchWithAuth = async (url, options = {}) => {

@@ -13,6 +13,7 @@ import { TenantContext } from "@/src/context/TenantContext";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BASE_URL, { fetchWithAuth } from "@/src/config/Api";
 import { LinearGradient } from "expo-linear-gradient";
+import FilterBottomSheet from "../../../components/FilterBottomScreen";
 
 import {
   Animated,
@@ -22,6 +23,7 @@ import {
   Image,
   Linking,
   Modal,
+  Alert,
   Platform,
   ScrollView,
   Share,
@@ -411,6 +413,22 @@ export default function TenantHomeScreen({ route }) {
   const [isModalVisible, setModalVisible] = useState(false);
   const [mainSearch, setMainSearch] = useState("");
   const [selectedType, setSelectedType] = useState("All");
+  const [maxRent, setMaxRent] = useState(100000);
+  const filterSheetRef = useRef(null);
+
+  const handleApplyFilters = (filters) => {
+    let loc = [];
+    if (filters.area) loc.push(filters.area);
+    if (filters.city) loc.push(filters.city);
+    if (filters.state) loc.push(filters.state);
+    if (loc.length > 0) {
+      setMainSearch(loc.join(", "));
+    }
+    setNearMe(filters.distance || 0);
+    if (filters.category) handleSelectType(filters.category);
+    if (filters.amenities) setSelectedFacilities(filters.amenities);
+    setMaxRent(filters.maxPrice || 100000);
+  };
 
 
 
@@ -427,18 +445,7 @@ export default function TenantHomeScreen({ route }) {
     }, [tenantEmail])
   );
 
-  useEffect(() => {
-    fetchProperties();
-  }, [
-    mainSearch,
-    selectedType,
-    nearMe,
-    selectedFacilities,
-    selectedHostelType,
-    selectedTenantType,
-    selectedCommercialFeature,
-    userCoords
-  ]);
+  // Removed useEffect for fetchProperties to avoid continuous API calls on filter change
 
   useEffect(() => {
     if (route?.params?.property) {
@@ -655,6 +662,14 @@ export default function TenantHomeScreen({ route }) {
 
     }
 
+    let matchesRent = true;
+    if (maxRent && maxRent < 100000) {
+      const r = parseFloat(item.rent);
+      if (!isNaN(r)) {
+        matchesRent = r <= maxRent;
+      }
+    }
+
     return (
       matchesSearch &&
       matchesType &&
@@ -662,6 +677,7 @@ export default function TenantHomeScreen({ route }) {
 
       matchesFacilities &&
       matchesSpecial &&
+      matchesRent &&
       item.isAvailable
     );
 
@@ -827,7 +843,7 @@ export default function TenantHomeScreen({ route }) {
                 />
                 <TouchableOpacity
                   style={homeStyles.filterBtn}
-                  onPress={() => setModalVisible(true)}
+                  onPress={() => filterSheetRef.current?.present()}
                 >
                   <Ionicons
                     name="options-outline"
@@ -916,7 +932,7 @@ export default function TenantHomeScreen({ route }) {
                 />
                 <TouchableOpacity
                   style={homeStyles.filterBtn}
-                  onPress={() => setModalVisible(true)}
+                  onPress={() => filterSheetRef.current?.present()}
                 >
                   <Ionicons
                     name="options-outline"
@@ -950,7 +966,7 @@ export default function TenantHomeScreen({ route }) {
               {/* HOSTEL */}
               <TouchableOpacity
                 style={[homeStyles.customCard, { backgroundColor: "#7c3aed" }]}
-                onPress={() => setSelectedType("Hostel")}
+                onPress={() => navigation.navigate("HostelScreen")}
               >
                 <Image
                   source={require("../../../assets/images/hostelLogo.png")}
@@ -968,7 +984,7 @@ export default function TenantHomeScreen({ route }) {
               {/* APARTMENT */}
               <TouchableOpacity
                 style={[homeStyles.customCard, { backgroundColor: "#60a5fa" }]}
-                onPress={() => setSelectedType("Apartment")}
+                onPress={() => navigation.navigate("ApartmentScreen")}
               >
                 <Image
                   source={require("../../../assets/images/apartmentLogo.png")}
@@ -986,7 +1002,7 @@ export default function TenantHomeScreen({ route }) {
               {/* COMMERCIAL */}
               <TouchableOpacity
                 style={[homeStyles.customCard, { backgroundColor: "#fb923c" }]}
-                onPress={() => setSelectedType("Commercial")}
+                onPress={() => navigation.navigate("CommercialScreen")}
               >
                 <Image
                   source={require("../../../assets/images/commercialLogo.png")}
@@ -1085,287 +1101,12 @@ export default function TenantHomeScreen({ route }) {
           )}
         </ScrollView>
 
-        {/* Filter Modal */}
-        {/* Filter Modal */}
-        <Modal
-          visible={isModalVisible}
-          animationType="slide"
-          transparent={true}
-        >
-          <View style={homeStyles.modalOverlay}>
-            <View style={[homeStyles.modalContent, { height: "80%" }]}>
-              <View style={homeStyles.modalHeader}>
-                <Text style={homeStyles.modalTitle}>Filters</Text>
-                <TouchableOpacity onPress={() => setModalVisible(false)}>
-                  <Ionicons name="close-circle" size={30} color="#333" />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView showsVerticalScrollIndicator={false}>
-                {/* 1. NEAR BY RANGE */}
-                <Text style={homeStyles.filterLabel}>Near By (Distance)</Text>
-                <View style={homeStyles.filterRow}>
-                  {[5, 10].map((dist) => (
-                    <TouchableOpacity
-                      key={dist}
-                      style={[
-                        homeStyles.chip,
-                        nearMe === dist && homeStyles.activeChip,
-                      ]}
-                      onPress={() => setNearMe(nearMe === dist ? 0 : dist)}
-                    >
-                      <Ionicons
-                        name="location-outline"
-                        size={14}
-                        color={nearMe === dist ? COLORS.WHITE : COLORS.PRIMARY}
-                        style={{ marginRight: 4 }}
-                      />
-                      <Text
-                        style={[
-                          homeStyles.chipText,
-                          nearMe === dist && homeStyles.activeChipText,
-                        ]}
-                      >
-                        Within {dist} KM
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-
-
-                {/* 3. TYPE BASED DYNAMIC UI */}
-                <View style={homeStyles.divider} />
-                <Text style={homeStyles.filterLabel}>
-                  Category
-                </Text>
-
-                <View style={homeStyles.categoryTabRow}>
-
-                  {categories.map((cat) => {
-
-                    const active = selectedType === cat.name;
-
-                    const categoryColor =
-                      cat.name === "Hostel"
-                        ? "#7c3aed"
-                        : cat.name === "Apartment"
-                          ? "#60a5fa"
-                          : cat.name === "Commercial"
-                            ? "#fb923c"
-                            : "#6C63FF";
-
-                    return (
-                      <TouchableOpacity
-                        key={cat.id}
-                        style={[
-                          homeStyles.categoryTab,
-                          {
-                            borderColor: active
-                              ? categoryColor
-                              : "#ececec",
-
-                            backgroundColor: active
-                              ? `${categoryColor}12`
-                              : "#fff",
-                          },
-                        ]}
-                        onPress={() =>
-                          handleSelectType(cat.name)
-                        }
-                      >
-                        <Ionicons
-                          name={cat.icon}
-                          size={20}
-                          color={categoryColor}
-                        />
-
-                        <Text
-                          style={[
-                            homeStyles.categoryTabText,
-                            {
-                              color: categoryColor,
-                            },
-                          ]}
-                        >
-                          {cat.name}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-
-                {/* Conditional UI for HOSTEL */}
-                {selectedType === "Hostel" && (
-                  <View style={homeStyles.subSection}>
-                    <Text style={homeStyles.subLabel}>Hostel Type</Text>
-                    <View style={homeStyles.filterRow}>
-                      {["Boys", "Girls", "Coliving"].map((t) => (
-                        <TouchableOpacity
-                          key={t}
-                          style={[
-                            homeStyles.chip,
-                            selectedHostelType === t && homeStyles.activeChip,
-                          ]}
-                          onPress={() => setSelectedHostelType(t)}
-                        >
-                          <Text
-                            style={[
-                              homeStyles.chipText,
-                              selectedHostelType === t &&
-                              homeStyles.activeChipText,
-                            ]}
-                          >
-                            {t}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-                )}
-
-                {/* Conditional UI for APARTMENT */}
-                {selectedType === "Apartment" && (
-                  <View>
-                    <Text style={homeStyles.subLabel}>Tenant / Size</Text>
-                    <View style={homeStyles.filterRow}>
-                      {["Family", "Bachelor", "1BHK", "2BHK", "3BHK", "4BHK", "5BHK"].map(
-                        (t) => (
-                          <TouchableOpacity
-                            key={t}
-                            style={[
-                              homeStyles.chip,
-                              selectedTenantType === t && homeStyles.activeChip,
-                            ]}
-                            onPress={() => setSelectedTenantType(t)}
-                          >
-                            <Text
-                              style={[
-                                homeStyles.chipText,
-                                selectedTenantType === t &&
-                                homeStyles.activeChipText,
-                              ]}
-                            >
-                              {t}
-                            </Text>
-                          </TouchableOpacity>
-                        ),
-                      )}
-                    </View>
-                  </View>
-                )}
-
-                {/* Conditional UI for COMMERCIAL */}
-                {selectedType === "Commercial" && (
-                  <View>
-                    <Text style={homeStyles.subLabel}>Property Purpose</Text>
-                    <View style={homeStyles.filterRow}>
-                      {["Office", "Shop", "Coworking", "Warehouse"].map((t) => (
-                        <TouchableOpacity
-                          key={t}
-                          style={[
-                            homeStyles.chip,
-                            selectedCommercialFeature === t &&
-                            homeStyles.activeChip,
-                          ]}
-                          onPress={() => setSelectedCommercialFeature(t)}
-                        >
-                          <Text
-                            style={[
-                              homeStyles.chipText,
-                              selectedCommercialFeature === t &&
-                              homeStyles.activeChipText,
-                            ]}
-                          >
-                            {t}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-                )}
-
-                {selectedType === "All" && (
-                  <Text
-                    style={{
-                      color: "#999",
-                      fontStyle: "italic",
-                      marginBottom: 10,
-                    }}
-                  >
-                    Select a category to see specific filters
-                  </Text>
-                )}
-
-                {/* 4. AMENITIES (Always Shown) */}
-                <Text style={homeStyles.filterLabel}>Amenities</Text>
-                <View style={homeStyles.filterRow}>
-                  {["WiFi", "Parking", "AC", "Gym", "Security", "Laundry"].map(
-                    (f) => (
-                      <TouchableOpacity
-                        key={f}
-                        style={[
-                          homeStyles.chip,
-                          selectedFacilities.includes(f) &&
-                          homeStyles.activeChip,
-                        ]}
-                        onPress={() =>
-                          setSelectedFacilities((prev) =>
-                            prev.includes(f)
-                              ? prev.filter((x) => x !== f)
-                              : [...prev, f],
-                          )
-                        }
-                      >
-                        <Text
-                          style={[
-                            homeStyles.chipText,
-                            selectedFacilities.includes(f) &&
-                            homeStyles.activeChipText,
-                          ]}
-                        >
-                          {f}
-                        </Text>
-                      </TouchableOpacity>
-                    ),
-                  )}
-                </View>
-
-                {/* Actions */}
-                <View style={{ flexDirection: "row", gap: 10, marginTop: 20 }}>
-                  <TouchableOpacity
-                    style={[
-                      homeStyles.applyBtn,
-                      { flex: 1, backgroundColor: "#eee" },
-                    ]}
-                    onPress={() => {
-                      setSelectedFacilities([]);
-                      setSelectedHostelType("");
-                      setSelectedTenantType("");
-                      setSelectedCommercialFeature("");
-
-                      setNearMe(0);
-                      setSelectedType("All");
-                      setMainSearch("");
-                      setModalVisible(false);
-                    }}
-                  >
-                    <Text style={{ color: "#333" }}>Reset</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[homeStyles.applyBtn, { flex: 2 }]}
-                    onPress={() => setModalVisible(false)}
-                  >
-                    <Text style={{ color: "#fff", fontWeight: "bold" }}>
-                      Apply Filters
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
+        <FilterBottomSheet
+          ref={filterSheetRef}
+          onApply={handleApplyFilters}
+          onReset={resetAllFilters}
+          allProperties={allProperties}
+        />
       </SafeAreaView>
     </SafeAreaProvider >
   );
@@ -1842,7 +1583,7 @@ export function PropertyDetailsScreen(props) {
         });
       }
 
-      const res = await fetch(`${BASE_URL}/api/withdraw_request/`, {
+      const res = await fetchWithAuth(`${BASE_URL}/api/withdraw_request/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -3443,6 +3184,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",
+    width: "100%",
     maxWidth: isWeb ? 900 : "100%",
     alignSelf: "center",
   },
