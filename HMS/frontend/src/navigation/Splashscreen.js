@@ -23,7 +23,7 @@ import Animated, {
 const { width, height } = Dimensions.get("window");
 
 export default function SplashScreen({ onFinish }) {
-  const logoScale = useSharedValue(0.5);
+  const logoScale = useSharedValue(0.3);
   const logoOpacity = useSharedValue(0);
   const logoFloat = useSharedValue(0);
 

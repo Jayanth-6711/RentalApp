@@ -9,6 +9,14 @@ LogBox.ignoreLogs([
   "Unable to activate keep awake",
 ]);
 
+if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+  window.addEventListener("unhandledrejection", (event) => {
+    if (event.reason && event.reason.message && event.reason.message.includes("keep awake")) {
+      event.preventDefault();
+    }
+  });
+}
+
 export default function App() {
   return (
     <LanguageProvider>
