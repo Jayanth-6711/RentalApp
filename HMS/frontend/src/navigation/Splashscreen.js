@@ -60,7 +60,7 @@ export default function SplashScreen({ onFinish }) {
 
     // Splash exit
     screenOpacity.value = withDelay(
-      9000,
+      3000,
       withTiming(0, { duration: 200 }, (finished) => {
         if (finished && onFinish) {
           runOnJS(onFinish)();
