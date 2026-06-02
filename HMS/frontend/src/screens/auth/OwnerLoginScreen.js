@@ -27,7 +27,7 @@ const apiKey = process.env.EXPO_PUBLIC_OTP_API_KEY;
 export default function OwnerLoginScreen({ navigation }) {
 
   const [phone, setPhone] = useState("");
-  const [otp, setOtp] = useState("");
+  const [otp, setOtp] = useState(["", "", "", ""]);
   const otpInputs = useRef([]);
   const [sessionId, setSessionId] = useState("");
   const [showOTPField, setShowOTPField] = useState(false);
@@ -65,7 +65,7 @@ export default function OwnerLoginScreen({ navigation }) {
 
         setSessionId(data.Details);
         setShowOTPField(true);
-        setOtp(""); // ✅ CLEAR OLD OTP
+        setOtp(["", "", "", ""]); // ✅ CLEAR OLD OTP
         setErrors({}); // ✅ CLEAR OLD ERRORS
 
         Alert.alert("Success", "OTP Sent Successfully");
@@ -91,8 +91,8 @@ export default function OwnerLoginScreen({ navigation }) {
 
   // VERIFY OTP
   const handleVerifyOTP = async () => {
-
-    if (otp.length !== 4) {
+    const otpString = otp.join("");
+    if (otpString.length !== 4) {
       setErrors({ otp: "Enter valid 4-digit OTP" });
       return;
     }
@@ -102,7 +102,7 @@ export default function OwnerLoginScreen({ navigation }) {
       setLoading(true); // ✅ START LOADING
 
       const verifyResponse = await fetch(
-        `https://2factor.in/API/V1/${apiKey}/SMS/VERIFY/${sessionId}/${otp}`
+        `https://2factor.in/API/V1/${apiKey}/SMS/VERIFY/${sessionId}/${otpString}`
       );
 
       const verifyData = await verifyResponse.json();
@@ -161,7 +161,7 @@ export default function OwnerLoginScreen({ navigation }) {
       } else {
 
         // ✅ CLEAR OTP ON WRONG ENTRY
-        setOtp("");
+        setOtp(["", "", "", ""]);
         setErrors({ otp: "Invalid OTP. Please try again." });
 
       }
@@ -181,7 +181,7 @@ export default function OwnerLoginScreen({ navigation }) {
 
   // ✅ RESEND OTP HANDLER
   const handleResendOTP = () => {
-    setOtp("");
+    setOtp(["", "", "", ""]);
     setErrors({});
     setShowOTPField(false);
     setSessionId("");
@@ -280,47 +280,49 @@ export default function OwnerLoginScreen({ navigation }) {
 
                       keyboardType="number-pad"
 
-                      maxLength={1}
+                      maxLength={index === 0 ? 4 : 1}
 
-                      value={otp[index] || ""}
+                      value={otp[index]}
 
                       autoFocus={index === 0}
 
+                      textContentType="oneTimeCode"
+                      autoComplete="sms-otp"
+
                       onChangeText={(value) => {
+                        console.log(`[OTP DEBUG] index: ${index}, value received: "${value}"`);
 
-                        const otpArray =
-                          otp.split("");
-
-                        otpArray[index] = value;
-
-                        const newOtp =
-                          otpArray.join("");
-
-                        setOtp(newOtp);
-
-                        setErrors((prev) => ({
-                          ...prev,
-                          otp: "",
-                        }));
-
-                        if (
-                          value &&
-                          index < 3
-                        ) {
-                          otpInputs.current[
-                            index + 1
-                          ]?.focus();
+                        // Handle paste/autofill of full OTP
+                        if (value.length > 1) {
+                          console.log(`[OTP DEBUG] Multi-character paste detected! Extracted: ${value.slice(0, 4)}`);
+                          const pasted = value.slice(0, 4).replace(/[^0-9]/g, "").split("");
+                          // pad with empty strings if less than 4
+                          while (pasted.length < 4) pasted.push("");
+                          
+                          setOtp(pasted);
+                          setErrors((prev) => ({ ...prev, otp: "" }));
+                          if (pasted.join("").length === 4) {
+                            otpInputs.current[3]?.focus();
+                          }
+                          return;
                         }
 
+                        // single character input
+                        setOtp((prevOtp) => {
+                          const newOtp = [...prevOtp];
+                          newOtp[index] = value;
+                          return newOtp;
+                        });
+
+                        setErrors((prev) => ({ ...prev, otp: "" }));
+
+                        if (value && index < 3) {
+                          otpInputs.current[index + 1]?.focus();
+                        }
                       }}
 
                       onKeyPress={({ nativeEvent }) => {
-
-                        if (
-                          nativeEvent.key === "Backspace" &&
-                          !otp[index] &&
-                          index > 0
-                        ) {
+                        if (nativeEvent.key === "Backspace" && !otp[index] && index > 0) {
                           otpInputs.current[
                             index - 1
                           ]?.focus();
@@ -452,7 +454,8 @@ const styles = StyleSheet.create({
   },
   otpWrapper: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "center",
+    gap: 12,
     marginBottom: 15,
     marginTop: 10,
   },

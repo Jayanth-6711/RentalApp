@@ -7,7 +7,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { useContext } from "react";
 import { BookingContext } from "@/src/context/BookingContext";
 import { useNavigation, useFocusEffect, useRoute } from "@react-navigation/native";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 import { TenantContext } from "@/src/context/TenantContext";
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -416,18 +416,30 @@ export default function TenantHomeScreen({ route }) {
   const [maxRent, setMaxRent] = useState(100000);
   const filterSheetRef = useRef(null);
 
+  // New strict filter states
+  const [filterState, setFilterState] = useState("");
+  const [filterCity, setFilterCity] = useState("");
+  const [filterArea, setFilterArea] = useState("");
+  const [sortBy, setSortBy] = useState("Recommended");
+
   const handleApplyFilters = (filters) => {
-    let loc = [];
-    if (filters.area) loc.push(filters.area);
-    if (filters.city) loc.push(filters.city);
-    if (filters.state) loc.push(filters.state);
-    if (loc.length > 0) {
-      setMainSearch(loc.join(", "));
-    }
+    setFilterState(filters.state || "");
+    setFilterCity(filters.city || "");
+    setFilterArea(filters.area || "");
     setNearMe(filters.distance || 0);
-    if (filters.category) handleSelectType(filters.category);
-    if (filters.amenities) setSelectedFacilities(filters.amenities);
+    
+    if (filters.category) {
+      if (selectedType !== filters.category) {
+         setSelectedType(filters.category);
+         setSelectedHostelType("");
+         setSelectedTenantType("");
+         setSelectedCommercialFeature("");
+      }
+    }
+    
+    setSelectedFacilities(filters.amenities || []);
     setMaxRent(filters.maxPrice || 100000);
+    setSortBy(filters.sortBy || "Recommended");
   };
 
 
@@ -560,155 +572,136 @@ export default function TenantHomeScreen({ route }) {
   };
 
   // Filtering Logic
-  // Updated Filtering Logic
-  const filteredProperties = allProperties.filter((item) => {
-
-    const searchText = normalizeSearchText(mainSearch.trim(), false);
-
-    const searchableText = normalizeSearchText(`
-  ${item.name || ""}
-  ${item.address || ""}
-  ${item.type || ""}
-  ${item.hostelType || ""}
-  ${item.allowedTenants || ""}
-  ${item.commercialType || ""}
-  ${item.officeType || ""}
-  ${(item.facilities || []).join(" ")}
-`, true)
-      .replace(/,/g, " ")
-      .replace(/\s+/g, " ");
-
-    const matchesSearch =
-      searchText === "" ||
-      searchableText.includes(searchText);
-
-    // 2. Category
-    const matchesType =
-      selectedType === "All" ||
-      item.type === selectedType;
-
-    // 3. Distance
-    let matchesDistance = true;
-
-
-    if (nearMe > 0 && userCoords) {
-      if (!item.latitude || !item.longitude) {
-        return false;
+  // Filtering Logic (Wrapped in useMemo for performance)
+  const filteredProperties = useMemo(() => {
+    
+    // 1. Filter
+    const filtered = allProperties.filter((item) => {
+      
+      // Parse address for hierarchical matching
+      let parsedArea = "";
+      let parsedCity = "";
+      let parsedState = "";
+      if (item.address) {
+        const parts = item.address.split(',').map(s => s.trim().toLowerCase());
+        if (parts.length >= 3) {
+          parsedArea = parts[0];
+          parsedCity = parts[1];
+          parsedState = parts[2];
+        } else if (parts.length === 2) {
+          parsedCity = parts[0];
+          parsedState = parts[1];
+        }
       }
-      const distance = getDistance(
-        userCoords.latitude,
-        userCoords.longitude,
-        item.latitude,
-        item.longitude
-      );
 
-      matchesDistance = distance <= nearMe;
-    } else if (nearMe > 0 && !userCoords) {
-      matchesDistance = false;
-    }
+      // Check hierarchical location matches
+      const matchesState = !filterState || parsedState === filterState.toLowerCase();
+      const matchesCity = !filterCity || parsedCity === filterCity.toLowerCase();
+      const matchesArea = !filterArea || parsedArea === filterArea.toLowerCase();
 
+      // Fallback search match for the main search bar (if it's not overridden by filters)
+      const searchText = normalizeSearchText(mainSearch.trim(), false);
+      const searchableText = normalizeSearchText(`
+        ${item.name || ""} ${item.address || ""} ${item.type || ""}
+      `, true).replace(/,/g, " ").replace(/\s+/g, " ");
+      
+      const matchesSearch = searchText === "" || searchableText.includes(searchText);
 
+      // Category
+      const matchesType = selectedType === "All" || item.type === selectedType;
 
-    // 5. Facilities
-    const matchesFacilities =
-      selectedFacilities.length === 0 ||
-      selectedFacilities.every((f) =>
-        item.facilities?.includes(f)
-      );
-
-    // 6. Sub Filters
-    let matchesSpecial = true;
-
-    if (
-      selectedHostelType &&
-      item.type === "Hostel"
-    ) {
-      matchesSpecial =
-        (item.hostelType || "")
-          .toLowerCase() ===
-        selectedHostelType.toLowerCase();
-    }
-
-    if (
-      selectedTenantType &&
-      item.type === "Apartment"
-    ) {
-
-      const tenantValue =
-        (item.allowedTenants || "")
-          .toLowerCase()
-          .trim();
-
-      matchesSpecial =
-        tenantValue ===
-        selectedTenantType.toLowerCase();
-
-    }
-    if (
-      selectedCommercialFeature &&
-      item.type === "Commercial"
-    ) {
-
-      const commercialValue =
-        (
-          item.commercialType ||
-          item.officeType ||
-          ""
-        ).toLowerCase().trim();
-
-      matchesSpecial =
-        commercialValue ===
-        selectedCommercialFeature.toLowerCase();
-
-    }
-
-    let matchesRent = true;
-    if (maxRent && maxRent < 100000) {
-      const r = parseFloat(item.rent);
-      if (!isNaN(r)) {
-        matchesRent = r <= maxRent;
+      // Distance
+      let matchesDistance = true;
+      if (nearMe > 0) {
+        if (!userCoords || !item.latitude || !item.longitude) {
+          matchesDistance = false;
+        } else {
+          const distance = getDistance(
+            userCoords.latitude,
+            userCoords.longitude,
+            item.latitude,
+            item.longitude
+          );
+          matchesDistance = distance <= nearMe;
+        }
       }
-    }
 
-    return (
-      matchesSearch &&
-      matchesType &&
-      matchesDistance &&
+      // Amenities
+      const matchesFacilities = selectedFacilities.length === 0 || 
+        selectedFacilities.every((f) => item.facilities?.includes(f));
 
-      matchesFacilities &&
-      matchesSpecial &&
-      matchesRent &&
-      item.isAvailable
-    );
+      // Sub Filters
+      let matchesSpecial = true;
+      if (selectedHostelType && item.type === "Hostel") {
+        matchesSpecial = (item.hostelType || "").toLowerCase() === selectedHostelType.toLowerCase();
+      }
+      if (selectedTenantType && item.type === "Apartment") {
+        matchesSpecial = (item.allowedTenants || "").toLowerCase().trim() === selectedTenantType.toLowerCase();
+      }
+      if (selectedCommercialFeature && item.type === "Commercial") {
+        const commercialValue = (item.commercialType || item.officeType || "").toLowerCase().trim();
+        matchesSpecial = commercialValue === selectedCommercialFeature.toLowerCase();
+      }
 
-  }).sort((a, b) => {
-    const normalize = (str) => (str || "").replace(/\s+/g, '').toLowerCase();
+      // Rent
+      let matchesRent = true;
+      if (maxRent && maxRent < 100000) {
+        const r = parseFloat(item.rent);
+        if (!isNaN(r)) {
+          matchesRent = r <= maxRent;
+        }
+      }
 
-    // 1. PRIORITY: ACCEPTED PROPERTIES
-    const latestA = requests.find(r =>
-      normalize(r.propertyName || r.property_name) === normalize(a.name)
-    );
-    const isAcceptedA = latestA?.status?.toLowerCase() === "accepted" || latestA?.status?.toLowerCase() === "completed";
+      return (
+        matchesState &&
+        matchesCity &&
+        matchesArea &&
+        matchesSearch &&
+        matchesType &&
+        matchesDistance &&
+        matchesFacilities &&
+        matchesSpecial &&
+        matchesRent &&
+        item.isAvailable
+      );
+    });
 
-    const latestB = requests.find(r =>
-      normalize(r.propertyName || r.property_name) === normalize(b.name)
-    );
-    const isAcceptedB = latestB?.status?.toLowerCase() === "accepted" || latestB?.status?.toLowerCase() === "completed";
+    // 2. Sort
+    return filtered.sort((a, b) => {
+      const normalize = (str) => (str || "").replace(/\s+/g, '').toLowerCase();
 
-    if (isAcceptedA && !isAcceptedB) return -1;
-    if (!isAcceptedA && isAcceptedB) return 1;
+      // PRIORITY: ACCEPTED PROPERTIES ALWAYS FIRST
+      const latestA = requests.find(r => normalize(r.propertyName || r.property_name) === normalize(a.name));
+      const isAcceptedA = latestA?.status?.toLowerCase() === "accepted" || latestA?.status?.toLowerCase() === "completed" || latestA?.status?.toLowerCase() === "allotted";
+      
+      const latestB = requests.find(r => normalize(r.propertyName || r.property_name) === normalize(b.name));
+      const isAcceptedB = latestB?.status?.toLowerCase() === "accepted" || latestB?.status?.toLowerCase() === "completed" || latestB?.status?.toLowerCase() === "allotted";
 
-    // 2. SECONDARY: NEARBY PROPERTIES (DISTANCE)
-    if (userCoords) {
-      if (!a.latitude || !a.longitude) return 1;
-      if (!b.latitude || !b.longitude) return -1;
-      const distA = getDistance(userCoords.latitude, userCoords.longitude, a.latitude, a.longitude);
-      const distB = getDistance(userCoords.latitude, userCoords.longitude, b.latitude, b.longitude);
-      return distA - distB;
-    }
+      if (isAcceptedA && !isAcceptedB) return -1;
+      if (!isAcceptedA && isAcceptedB) return 1;
 
-    return 0;
-  });
+      // APPLY USER SELECTED SORT
+      if (sortBy === "Price Low-High") {
+        return (parseFloat(a.rent) || 0) - (parseFloat(b.rent) || 0);
+      } else if (sortBy === "Price High-Low") {
+        return (parseFloat(b.rent) || 0) - (parseFloat(a.rent) || 0);
+      } else if (sortBy === "Nearest First" && userCoords) {
+        if (!a.latitude || !a.longitude) return 1;
+        if (!b.latitude || !b.longitude) return -1;
+        const distA = getDistance(userCoords.latitude, userCoords.longitude, a.latitude, a.longitude);
+        const distB = getDistance(userCoords.latitude, userCoords.longitude, b.latitude, b.longitude);
+        return distA - distB;
+      }
+      
+      // Default Recommended (already sorted by Priority, or just fallback to ID/name)
+      return 0;
+    });
+
+  }, [
+    allProperties, mainSearch, filterState, filterCity, filterArea, 
+    selectedType, nearMe, userCoords, selectedFacilities, selectedHostelType, 
+    selectedTenantType, selectedCommercialFeature, maxRent, sortBy, requests
+  ]);
   const handleSelectType = (type) => {
 
     if (selectedType === type) {
@@ -727,10 +720,14 @@ export default function TenantHomeScreen({ route }) {
     setSelectedHostelType("");
     setSelectedTenantType("");
     setSelectedCommercialFeature("");
-
     setNearMe(0);
     setSelectedType("All");
     setMainSearch("");
+    setFilterState("");
+    setFilterCity("");
+    setFilterArea("");
+    setSortBy("Recommended");
+    setMaxRent(100000);
   };
   const activeFilterCount = [
     nearMe > 0,
